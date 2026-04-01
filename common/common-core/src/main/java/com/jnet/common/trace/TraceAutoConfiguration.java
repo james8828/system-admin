@@ -7,19 +7,31 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * 链路追踪自动配置
- * <p>
- * 为 Servlet 环境提供链路追踪组件支持
- * </p>
- *
+ * 
+ * <p>为 Servlet 环境提供链路追踪组件支持</p>
+ * 
  * <h3>适用场景：</h3>
  * <ul>
  *   <li>✅ 业务服务（Spring MVC / Servlet 环境）</li>
  *   <li>❌ 网关服务（Spring WebFlux / Reactive 环境）- 使用 GatewayTraceFilter</li>
  * </ul>
- *
- * @author JNet Team
+ * 
+ * <h3>配置条件：</h3>
+ * <ul>
+ *   <li>必须是 Servlet 环境（@ConditionalOnWebApplication(type = SERVLET)）</li>
+ *   <li>配置 jnet.trace.enabled=true（默认 true）</li>
+ * </ul>
+ * 
+ * <h3>提供的组件：</h3>
+ * <ul>
+ *   <li>TraceFilter - Servlet 过滤器，处理请求级别的链路追踪</li>
+ *   <li>TraceAspect - AOP 切面，处理方法级别的链路追踪</li>
+ *   <li>TraceFeignInterceptor - Feign 拦截器，实现微服务间的链路传递</li>
+ * </ul>
+ * 
+ * @author mu
  * @version 4.0 (明确区分应用场景)
- * @since 2024-01-01
+ * @since 2026/4/1
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -28,9 +40,8 @@ public class TraceAutoConfiguration {
 
     /**
      * Feign 客户端的链路追踪拦截器
-     * <p>
-     * 在微服务间调用时自动传递 Trace ID
-     * </p>
+     * 
+     * <p>在微服务间调用时自动传递 Trace ID</p>
      *
      * @return 链路追踪拦截器
      */
@@ -41,9 +52,8 @@ public class TraceAutoConfiguration {
 
     /**
      * AOP 切面，用于方法级别的链路追踪
-     * <p>
-     * 可以在 Service 层等方法上记录链路信息
-     * </p>
+     * 
+     * <p>可以在 Service 层等方法上记录链路信息</p>
      *
      * @return 链路追踪切面
      */
@@ -54,9 +64,8 @@ public class TraceAutoConfiguration {
 
     /**
      * Servlet 环境的过滤器
-     * <p>
-     * 为每个请求生成或提取 TraceId，并在响应完成后清理
-     * </p>
+     * 
+     * <p>为每个请求生成或提取 TraceId，并在响应完成后清理</p>
      *
      * @return 链路追踪过滤器
      */

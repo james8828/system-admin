@@ -6,9 +6,9 @@ package com.jnet.common.constant;
  * 将原有的字符串和整数常量重构为类型安全的枚举，提供更好的代码可读性和可维护性
  * </p>
  *
- * @author JNet Team
+ * @author mu
  * @version 1.0
- * @since 2024-01-01
+ * @since 2026/4/1
  */
 public enum Constants {
     ;

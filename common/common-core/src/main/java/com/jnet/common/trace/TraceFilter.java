@@ -13,16 +13,27 @@ import static com.jnet.common.constant.Constants.TRACE_ID_HEADER;
 
 /**
  * 链路追踪过滤器
- * <p>
- * 为每个请求生成或提取 TraceId，并在响应完成后清理
- * </p>
- *
+ * 
+ * <p>为每个请求生成或提取 TraceId，并在响应完成后清理</p>
+ * 
+ * <h3>主要功能：</h3>
+ * <ul>
+ *     <li>从请求头中提取 TraceId（来自网关或上游服务）</li>
+ *     <li>如果没有 TraceId 则生成新的</li>
+ *     <li>将 TraceId 设置到 ThreadLocal 中</li>
+ *     <li>请求结束后自动清理 ThreadLocal</li>
+ * </ul>
+ * 
  * <h4>📝 日志格式：</h4>
  * <ul>
  *   <li>统一使用 [Trace] [Servlet] 前缀</li>
  *   <li>TraceId 紧跟在组件标识后面：[Trace] [Servlet] [{traceId}]</li>
  *   <li>便于日志收集和分析</li>
  * </ul>
+ * 
+ * @author mu
+ * @version 1.0
+ * @since 2026/4/1
  */
 @Slf4j
 public class TraceFilter extends OncePerRequestFilter implements Ordered {
@@ -42,11 +53,11 @@ public class TraceFilter extends OncePerRequestFilter implements Ordered {
 
             if (traceId != null && !traceId.isEmpty()) {
                 TraceContext.setTraceId(traceId);
-                log.debug("[Trace] [Servlet] [{}] Extracted from request header", traceId);
+                log.debug("[Trace] [Servlet] [{}] 从请求头中提取", traceId);
             } else {
                 // 如果没有则生成新的
                 traceId = TraceContext.getOrGenerateTraceId();
-                log.debug("[Trace] [Servlet] [{}] Generated new trace ID", traceId);
+                log.debug("[Trace] [Servlet] [{}] 生成新的 Trace ID", traceId);
                 
                 // 🔥 关键修复：将新生成的 TraceId 添加到请求属性中，供下游获取
                 request.setAttribute(TRACE_ID_HEADER, traceId);
