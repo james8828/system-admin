@@ -15,23 +15,48 @@ import java.util.Map;
 /**
  * OAuth2 设置工具类
  * 
- * 提供 ClientSettings 和 TokenSettings 的解析和转换方法
+ * <p>核心功能：解析和转换 OAuth2 客户端设置和 Token 设置</p>
  * 
- * @author JNet
- * @since 1.0.0
+ * <p>主要职责：</p>
+ * <ul>
+ *     <li>将 Object 类型的 clientSettings 转换为 ClientSettings 对象</li>
+ *     <li>将 Object 类型的 tokenSettings 转换为 TokenSettings 对象</li>
+ *     <li>支持多种数据格式（Map、JSON String、Java Bean）</li>
+ *     <li>支持 kebab-case 和 camelCase 两种命名风格</li>
+ *     <li>解析布尔值、持续时间等复杂类型</li>
+ * </ul>
+ * 
+ * <p>使用场景：</p>
+ * <ul>
+ *     <li>从数据库读取 OAuth2 客户端配置</li>
+ *     <li>反序列化 JSONB 格式的设置数据</li>
+ *     <li>构建 Spring Security OAuth2 的配置对象</li>
+ * </ul>
+ * 
+ * @author mu
+ * @version 1.0
+ * @since 2026/4/1
  */
 @Slf4j
 @Component
-public class OAuth2SettingsUtils {
+public class OAuth2SettingsUtil {
 
     private static ObjectMapper objectMapper;
 
-    public OAuth2SettingsUtils(ObjectMapper objectMapper) {
-        OAuth2SettingsUtils.objectMapper = objectMapper;
+    public OAuth2SettingsUtil(ObjectMapper objectMapper) {
+        OAuth2SettingsUtil.objectMapper = objectMapper;
     }
 
     /**
      * 将 Object 类型的 clientSettings 转换为 ClientSettings
+     * 
+     * <p>支持的配置项：</p>
+     * <ul>
+     *     <li>require-authorization-consent - 是否需要授权同意</li>
+     *     <li>require-proof-key - PKCE 是否需要 proof key</li>
+     *     <li>jwk-set-url - JWK Set URL</li>
+     *     <li>token-endpoint-authentication-signing-algorithm - Token 端点认证签名算法</li>
+     * </ul>
      * 
      * @param clientSettingsObject Object 类型的客户端设置（可能是 Map、String 或其他类型）
      * @return ClientSettings 对象
@@ -71,12 +96,12 @@ public class OAuth2SettingsUtils {
                 try {
                     builder.tokenEndpointAuthenticationSigningAlgorithm(SignatureAlgorithm.from(algorithmValue));
                 } catch (Exception e) {
-                    log.warn("Invalid token endpoint authentication signing algorithm: {}", algorithmValue);
+                    log.warn("无效的 Token 端点认证签名算法：{}", algorithmValue);
                 }
             }
 
         } catch (Exception e) {
-            log.warn("Failed to parse client settings: {}", e.getMessage());
+            log.warn("解析客户端设置失败：{}", e.getMessage());
         }
 
         return builder.build();
@@ -85,6 +110,23 @@ public class OAuth2SettingsUtils {
     /**
      * 将 Object 类型的 tokenSettings 转换为 TokenSettings
      * 
+     * <p>支持的配置项：</p>
+     * <ul>
+     *     <li>access-token-time-to-live - Access Token 有效期（秒）</li>
+     *     <li>refresh-token-time-to-live - Refresh Token 有效期（秒）</li>
+     *     <li>access-token-format - Access Token 格式（如 JWT）</li>
+     *     <li>reuse-refresh-tokens - 是否重用 Refresh Token</li>
+     *     <li>authorization-code-time-to-live - Authorization Code 有效期（秒）</li>
+     *     <li>device-code-time-to-live - Device Code 有效期（秒）</li>
+     *     <li>id-token-signature-algorithm - ID Token 签名算法</li>
+     * </ul>
+     * 
+     * <p>命名风格支持：</p>
+     * <ul>
+     *     <li>kebab-case: access-token-time-to-live (JSONB 原始格式)</li>
+     *     <li>camelCase: accessTokenTimeToLive (Java 序列化格式)</li>
+     * </ul>
+     * 
      * @param tokenSettingsObject Object 类型的令牌设置（可能是 Map、String 或其他类型）
      * @return TokenSettings 对象
      */
@@ -92,7 +134,7 @@ public class OAuth2SettingsUtils {
         TokenSettings.Builder builder = TokenSettings.builder();
 
         if (tokenSettingsObject == null) {
-            log.info("Token settings is null, using default settings");
+            log.info("Token 设置为空，使用默认设置");
             // 默认设置
             return builder.build();
         }
@@ -100,7 +142,7 @@ public class OAuth2SettingsUtils {
         try {
             // 如果已经是 Map 类型，直接使用
             Map<String, Object> settings = convertToMap(tokenSettingsObject);
-            log.info("Parsing token settings from map: {}", settings);
+            log.info("正在解析 Token 设置：{}", settings);
 
             // 支持两种命名风格：kebab-case 和 camelCase
             // kebab-case: access-token-time-to-live (JSONB 原始格式)
@@ -112,13 +154,13 @@ public class OAuth2SettingsUtils {
                 accessTokenTTL = settings.get("accessTokenTimeToLive");
             }
             if (accessTokenTTL != null) {
-                log.info("Found access-token-time-to-live: {} (type: {})", accessTokenTTL, accessTokenTTL.getClass().getName());
+                log.info("找到 access-token-time-to-live: {} (类型：{})", accessTokenTTL, accessTokenTTL.getClass().getName());
                 Long seconds = parseDurationSeconds(accessTokenTTL);
                 if (seconds != null) {
                     builder.accessTokenTimeToLive(java.time.Duration.ofSeconds(seconds));
-                    log.info("Set access token TTL: {} seconds", seconds);
+                    log.info("已设置 Access Token 有效期：{} 秒", seconds);
                 } else {
-                    log.warn("Failed to parse access-token-time-to-live: {}", accessTokenTTL);
+                    log.warn("解析 access-token-time-to-live 失败：{}", accessTokenTTL);
                 }
             }
 
@@ -128,13 +170,13 @@ public class OAuth2SettingsUtils {
                 refreshTokenTTL = settings.get("refreshTokenTimeToLive");
             }
             if (refreshTokenTTL != null) {
-                log.info("Found refresh-token-time-to-live: {} (type: {})", refreshTokenTTL, refreshTokenTTL.getClass().getName());
+                log.info("找到 refresh-token-time-to-live: {} (类型：{})", refreshTokenTTL, refreshTokenTTL.getClass().getName());
                 Long seconds = parseDurationSeconds(refreshTokenTTL);
                 if (seconds != null) {
                     builder.refreshTokenTimeToLive(java.time.Duration.ofSeconds(seconds));
-                    log.info("Set refresh token TTL: {} seconds", seconds);
+                    log.info("已设置 Refresh Token 有效期：{} 秒", seconds);
                 } else {
-                    log.warn("Failed to parse refresh-token-time-to-live: {}", refreshTokenTTL);
+                    log.warn("解析 refresh-token-time-to-live 失败：{}", refreshTokenTTL);
                 }
             }
 
@@ -147,9 +189,9 @@ public class OAuth2SettingsUtils {
                 String formatValue = accessTokenFormat.toString();
                 try {
                     builder.accessTokenFormat(new org.springframework.security.oauth2.server.authorization.settings.OAuth2TokenFormat(formatValue));
-                    log.info("Set access token format: {}", formatValue);
+                    log.info("已设置 Access Token 格式：{}", formatValue);
                 } catch (Exception e) {
-                    log.warn("Invalid access token format: {}", formatValue);
+                    log.warn("无效的 Access Token 格式：{}", formatValue);
                 }
             }
 
@@ -161,7 +203,7 @@ public class OAuth2SettingsUtils {
             if (reuseRefreshTokens != null) {
                 boolean reuse = parseBoolean(reuseRefreshTokens);
                 builder.reuseRefreshTokens(reuse);
-                log.info("Set reuse refresh tokens: {}", reuse);
+                log.info("已设置是否重用 Refresh Token: {}", reuse);
             }
 
             // 解析 authorization-code-time-to-live
@@ -173,7 +215,7 @@ public class OAuth2SettingsUtils {
                 Long seconds = parseDurationSeconds(authCodeTTL);
                 if (seconds != null) {
                     builder.authorizationCodeTimeToLive(java.time.Duration.ofSeconds(seconds));
-                    log.info("Set authorization code TTL: {} seconds", seconds);
+                    log.info("已设置 Authorization Code 有效期：{} 秒", seconds);
                 }
             }
 
@@ -186,7 +228,7 @@ public class OAuth2SettingsUtils {
                 Long seconds = parseDurationSeconds(deviceCodeTTL);
                 if (seconds != null) {
                     builder.deviceCodeTimeToLive(java.time.Duration.ofSeconds(seconds));
-                    log.info("Set device code TTL: {} seconds", seconds);
+                    log.info("已设置 Device Code 有效期：{} 秒", seconds);
                 }
             }
 
@@ -199,16 +241,16 @@ public class OAuth2SettingsUtils {
                 String algorithmValue = idTokenAlgorithm.toString();
                 try {
                     builder.idTokenSignatureAlgorithm(SignatureAlgorithm.from(algorithmValue));
-                    log.info("Set ID token signature algorithm: {}", algorithmValue);
+                    log.info("已设置 ID Token 签名算法：{}", algorithmValue);
                 } catch (Exception e) {
-                    log.warn("Invalid ID token signature algorithm: {}", algorithmValue);
+                    log.warn("无效的 ID Token 签名算法：{}", algorithmValue);
                 }
             }
 
-            log.info("Token settings built successfully");
+            log.info("Token 设置构建成功");
 
         } catch (Exception e) {
-            log.error("Failed to parse token settings: {}", e.getMessage(), e);
+            log.error("解析 Token 设置失败：{}", e.getMessage(), e);
         }
 
         return builder.build();
@@ -216,6 +258,13 @@ public class OAuth2SettingsUtils {
 
     /**
      * 解析布尔值（支持 Boolean、Integer、String 等类型）
+     * 
+     * <p>支持的输入格式：</p>
+     * <ul>
+     *         <li>Boolean - 直接返回</li>
+     *         <li>Integer - 非 0 为 true，0 为 false</li>
+     *         <li>String - "true"、"1" 或布尔字符串</li>
+     * </ul>
      * 
      * @param value 待解析的值
      * @return 布尔值
@@ -235,10 +284,16 @@ public class OAuth2SettingsUtils {
 
     /**
      * 解析持续时间（秒数）
-     * 支持 Long、Integer、String、Map（Duration 对象）、ISO-8601 格式等
+     * 
+     * <p>支持的输入格式：</p>
+     * <ul>
+     *         <li>Long/Integer - 直接返回秒数</li>
+     *         <li>String - 数字字符串或 ISO-8601 格式（如 "PT5M", "PT1H"）</li>
+     *         <li>Map - Duration 对象的序列化格式</li>
+     * </ul>
      * 
      * @param value 待解析的值
-     * @return 秒数
+     * @return 秒数，解析失败返回 null
      */
     public static Long parseDurationSeconds(Object value) {
         if (value == null) {
@@ -257,7 +312,7 @@ public class OAuth2SettingsUtils {
                     java.time.Duration duration = java.time.Duration.parse(stringValue);
                     return duration.getSeconds();
                 } catch (Exception e) {
-                    log.warn("Failed to parse ISO-8601 duration: {}", stringValue);
+                    log.warn("解析 ISO-8601 持续时间失败：{}", stringValue);
                 }
             }
             
@@ -265,7 +320,7 @@ public class OAuth2SettingsUtils {
             try {
                 return Long.parseLong(stringValue);
             } catch (NumberFormatException e) {
-                log.warn("Failed to parse duration string: {}", value);
+                log.warn("解析持续时间字符串失败：{}", value);
             }
         }
 
@@ -296,6 +351,13 @@ public class OAuth2SettingsUtils {
     /**
      * 将 Object 转换为 Map
      * 
+     * <p>转换策略：</p>
+     * <ul>
+     *         <li>Map - 直接返回</li>
+     *         <li>String - 解析为 JSON</li>
+     *         <li>其他对象 - 先序列化为 JSON，再反序列化为 Map</li>
+     * </ul>
+     * 
      * @param object 待转换的对象
      * @return Map 对象
      * @throws Exception 转换失败时抛出异常
@@ -315,6 +377,8 @@ public class OAuth2SettingsUtils {
     /**
      * LocalDateTime 转 Instant
      * 
+     * <p>使用时区转换将 LocalDateTime 转换为 Instant</p>
+     * 
      * @param localDateTime LocalDateTime 对象
      * @return Instant 对象，如果为 null 则返回 null
      */
@@ -327,6 +391,8 @@ public class OAuth2SettingsUtils {
 
     /**
      * Instant 转 LocalDateTime
+     * 
+     * <p>使用时区转换将 Instant 转换为 LocalDateTime</p>
      * 
      * @param instant Instant 对象
      * @return LocalDateTime 对象，如果为 null 则返回 null

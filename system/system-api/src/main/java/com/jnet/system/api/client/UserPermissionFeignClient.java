@@ -27,20 +27,6 @@ public interface UserPermissionFeignClient {
      * 
      * @return 用户权限信息
      */
-    @GetMapping("/api/system/permissions/")
+    @GetMapping("/api/system/permissions")
     Result<UserPermissionDTO> getPermissionsByCurrentUser();
-
-
-
-    /**
-     * 根据用户 ID 查询用户权限信息
-     * <p>
-     * 返回用户的角色列表和权限标识列表，用于动态权限控制
-     * </p>
-     * 
-     * @param userId 用户 ID
-     * @return 用户权限信息
-     */
-    @GetMapping("/api/system/permissions/user/{userId}")
-    Result<UserPermissionDTO> getUserPermissionsByUserId(@PathVariable("userId") Long userId);
 }

@@ -72,8 +72,22 @@ const handlePermission = (row: RoleInfo) => {
   ElMessage.info(`分配权限：${row.roleName}`)
 }
 
-const handleDelete = (row: RoleInfo) => {
-  ElMessage.info(`删除角色：${row.roleName}`)
+const handleDelete = async (row: RoleInfo) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除角色"${row.roleName}"吗？`, '警告', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    
+    await roleApi.deleteRole(row.roleId)
+    ElMessage.success('删除成功')
+    getList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Delete failed:', error)
+    }
+  }
 }
 
 onMounted(() => {

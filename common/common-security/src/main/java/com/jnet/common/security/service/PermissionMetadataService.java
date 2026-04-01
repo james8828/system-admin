@@ -197,8 +197,8 @@ public class PermissionMetadataService {
     /**
      * 获取或加载用户权限（使用缓存管理器）
      * <p>
-     * 此时 SecurityContextHolder 中已有认证信息，直接提取用户名
-     * Feign 调用会自动传递 JWT Token
+     * 优先从 JWT Token claims 中获取 userId
+     * 如果找不到，再使用用户名作为降级方案
      * </p>
      *
      * @return 用户权限 DTO
@@ -210,16 +210,52 @@ public class PermissionMetadataService {
             traceId = "unknown";
         }
         
-        // 步骤 1: 从 SecurityContextHolder 提取用户名
-        String username = extractUsernameFromSecurityContext();
+        // 步骤 1: 尝试从 JWT Token claims 中获取 userId
+        Long userId = extractUserIdFromToken();
+        String username = null;
+        
+        if (userId != null) {
+            log.debug("[Trace] [Security] [{}] 从 Token claims 中获取到 userId={}", traceId, userId);
+            // 使用 userId 作为缓存键
+            String cacheKey = "user:id:" + userId;
+            
+            // 尝试从缓存获取
+            UserPermissionDTO cached = cacheManager.get(cacheKey);
+            if (cached != null) {
+                log.debug("[Trace] [Security] [{}] 缓存命中 - userId={}, 角色数={}, 权限数={}, 路径数={}",
+                        traceId, userId, cached.getRoles().size(), cached.getPermissions().size(), cached.getPaths().size());
+                return cached;
+            }
+            
+            // 通过 Feign 按 userId 查询
+            try {
+                Result<UserPermissionDTO> result = userPermissionFeignClient.getPermissionsByCurrentUser();
+                if (result != null && result.isSuccess() && result.getData() != null) {
+                    UserPermissionDTO dto = result.getData();
+                    cacheManager.put(cacheKey, dto);
+                    log.info("[Trace] [Security] [{}] 已缓存用户权限 - userId={}, 角色数={}, 权限数={}, 路径数={}",
+                            traceId, userId, dto.getRoles().size(), dto.getPermissions().size(), dto.getPaths().size());
+                    return dto;
+                } else {
+                    log.warn("[Trace] [Security] [{}] Feign 调用失败 - userId={}, 代码={}, 消息={}",
+                            traceId, userId, result != null ? result.getCode() : "null",
+                            result != null ? result.getMessage() : "null");
+                }
+            } catch (Exception e) {
+                log.error("[Trace] [Security] [{}] 按 userId 获取用户权限出错 - userId={}", traceId, userId, e);
+            }
+        }
+        
+        // 步骤 2: 如果没有 userId，使用用户名作为降级方案
+        username = extractUsernameFromSecurityContext();
         if (username == null || username.isEmpty()) {
             log.debug("[Trace] [Security] [{}] 未找到认证用户，无法获取权限", traceId);
             return null;
         }
-    
-        // 步骤 2: 使用用户名作为缓存键
+        
+        log.info("[Trace] [Security] [{}] 降级使用用户名查询 - username={}", traceId, username);
         String cacheKey = "user:" + username;
-            
+        
         // 尝试从缓存获取
         UserPermissionDTO cached = cacheManager.get(cacheKey);
         if (cached != null) {
@@ -227,14 +263,12 @@ public class PermissionMetadataService {
                     traceId, username, cached.getRoles().size(), cached.getPermissions().size(), cached.getPaths().size());
             return cached;
         }
-    
-        // 步骤 3: 缓存未命中，通过 Feign 查询（会自动传递 JWT Token）
-        log.info("[Trace] [Security] [{}] 缓存未命中，正在通过 Feign 获取用户权限 - 用户={}", traceId, username);
+        
+        // 通过 Feign 按用户名查询
         try {
             Result<UserPermissionDTO> result = userPermissionFeignClient.getPermissionsByCurrentUser();
             if (result != null && result.isSuccess() && result.getData() != null) {
                 UserPermissionDTO dto = result.getData();
-                // 存入缓存
                 cacheManager.put(cacheKey, dto);
                 log.info("[Trace] [Security] [{}] 已缓存用户权限 - 用户={}, 角色数={}, 权限数={}, 路径数={}",
                         traceId, username, dto.getRoles().size(), dto.getPermissions().size(), dto.getPaths().size());
@@ -247,7 +281,69 @@ public class PermissionMetadataService {
         } catch (Exception e) {
             log.error("[Trace] [Security] [{}] 获取用户权限出错 - 用户={}", traceId, username, e);
         }
+        
         return null;
+    }
+    
+    /**
+     * 从 JWT Token claims 中提取 userId
+     * 优先使用此方法，因为 Token 中已包含 userId
+     *
+     * @return userId，如果不存在返回 null
+     */
+    private Long extractUserIdFromToken() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return null;
+            }
+            
+            // 情况 1: JwtAuthenticationToken（Resource Server 标准情况）
+            if (authentication instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+                Object userIdObj = jwtAuth.getToken().getClaim("userId");
+                if (userIdObj instanceof Number) {
+                    Long userId = ((Number) userIdObj).longValue();
+                    log.debug("从 JwtAuthenticationToken 中提取到 userId={}", userId);
+                    return userId;
+                }
+                log.debug("JwtAuthenticationToken 中未找到 userId claim");
+                return null;
+            }
+            
+            // 情况 2: 尝试通过反射从任意 Authentication 的 attributes 中获取
+            // 使用反射避免依赖问题
+            try {
+                var getAttributesMethod = authentication.getClass().getMethod("getAttributes");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> attributes = (Map<String, Object>) getAttributesMethod.invoke(authentication);
+                Object userIdObj = attributes.get("userId");
+                if (userIdObj instanceof Number) {
+                    Long userId = ((Number) userIdObj).longValue();
+                    log.debug("从 Authentication.attributes 中提取到 userId={}", userId);
+                    return userId;
+                }
+            } catch (NoSuchMethodException e) {
+                // 不支持 getAttributes 方法，忽略
+            }
+            
+            // 情况 3: 从 authentication details 中获取
+            if (authentication.getDetails() instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> details = (Map<String, Object>) authentication.getDetails();
+                Object userIdObj = details.get("userId");
+                if (userIdObj instanceof Number) {
+                    Long userId = ((Number) userIdObj).longValue();
+                    log.debug("从 Authentication.details 中提取到 userId={}", userId);
+                    return userId;
+                }
+            }
+            
+            log.debug("无法从 Authentication 中提取 userId，类型：{}", authentication.getClass().getSimpleName());
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to extract userId from token", e);
+            return null;
+        }
     }
     
     /**

@@ -3,6 +3,7 @@ package com.jnet.system.controller;
 import com.jnet.common.result.PageQuery;
 import com.jnet.common.result.PageResult;
 import com.jnet.common.result.Result;
+import com.jnet.common.result.ResultCode;
 import com.jnet.system.api.dto.UserPermissionDTO;
 import com.jnet.system.dto.PermissionCheckResult;
 import com.jnet.system.dto.PermissionDTO;

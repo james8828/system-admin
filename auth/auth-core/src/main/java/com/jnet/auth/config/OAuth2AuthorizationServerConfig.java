@@ -4,6 +4,7 @@ import com.jnet.auth.cache.RedisRequestCache;
 import com.jnet.auth.filter.OAuth2StateAuthenticationFilter;
 import com.jnet.auth.handler.CustomAuthenticationSuccessHandler;
 import com.jnet.auth.service.CustomUserDetailsService;
+import com.jnet.auth.utils.RsaKeyUtil;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -27,22 +28,49 @@ import org.springframework.security.oauth2.server.authorization.settings.Authori
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.util.StringUtils;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.UUID;
 
 /**
  * OAuth2 授权服务器配置类
- *
- * 负责配置 Spring Authorization Server 的核心功能：
- * 1. 提供 OAuth2 授权端点（/oauth2/authorize）
- * 2. 提供 Token 端点（/oauth2/token）
- * 3. 支持 PKCE 模式
- * 4. 支持 OIDC (OpenID Connect)
- * 5. 使用 Redis 保存请求上下文和 OAuth2 参数
+ * 
+ * <p>负责配置 Spring Authorization Server 的核心功能：</p>
+ * <ul>
+ *     <li>提供 OAuth2 授权端点（/oauth2/authorize）</li>
+ *     <li>提供 Token 端点（/oauth2/token）</li>
+ *     <li>支持 PKCE 模式（Proof Key for Code Exchange）</li>
+ *     <li>支持 OIDC (OpenID Connect) 身份认证协议</li>
+ *     <li>使用 Redis 保存请求上下文和 OAuth2 参数，实现分布式会话管理</li>
+ * </ul>
+ * 
+ * <p>安全配置：</p>
+ * <ul>
+ *     <li>双 SecurityFilterChain 设计（登录链 + 授权服务器链）</li>
+ *     <li>使用 BCrypt 加密存储用户密码</li>
+ *     <li>RSA 密钥对签名 JWT Token，确保证书安全</li>
+ *     <li>通过 state 参数防止 CSRF 攻击</li>
+ * </ul>
+ * 
+ * @author mu
+ * @version 1.0
+ * @since 2026/4/1
  */
 @Slf4j
 @Configuration
@@ -51,8 +79,10 @@ public class OAuth2AuthorizationServerConfig {
 
     /**
      * 网关基础 URL 配置
-     * 用于构建完整的 OAuth2 重定向地址
-     * 默认值：http://localhost:8080
+     * 
+     * <p>用于构建完整的 OAuth2 重定向地址和 Token 发行者标识</p>
+     * <p>默认值：http://localhost:8080</p>
+     * <p>配置文件属性：gateway.base-url</p>
      */
     @Value("${gateway.base-url:http://localhost:8080}")
     private String gatewayBaseUrl;
@@ -60,10 +90,12 @@ public class OAuth2AuthorizationServerConfig {
     /**
      * 密码编码器 Bean
      *
-     * 功能：
-     * - 使用 BCrypt 强哈希算法加密用户密码
-     * - BCrypt 是自适应的一-way 哈希函数，对暴力破解有很好的防护
-     * - 自动处理盐值（salt），无需手动管理
+     * <p>功能：</p>
+     * <ul>
+     *     <li>使用 BCrypt 强哈希算法加密用户密码</li>
+     *     <li>BCrypt 是自适应的一-way 哈希函数，对暴力破解有很好的防护</li>
+     *     <li>自动处理盐值（salt），无需手动管理</li>
+     * </ul>
      *
      * @return PasswordEncoder 实例
      */
@@ -75,16 +107,20 @@ public class OAuth2AuthorizationServerConfig {
     /**
      * 登录安全过滤器链（优先级：1）
      *
-     * 职责：
-     * - 处理 /login 和 /error 路径的安全认证
-     * - 配置表单登录（Form Login）
-     * - 集成 RedisRequestCache 保存 OAuth2 授权参数
-     * - 配置自定义认证成功处理器
+     * <p>职责：</p>
+     * <ul>
+     *     <li>处理 /login 和 /error 路径的安全认证</li>
+     *     <li>配置表单登录（Form Login）</li>
+     *     <li>集成 RedisRequestCache 保存 OAuth2 授权参数</li>
+     *     <li>配置自定义认证成功处理器</li>
+     * </ul>
      *
-     * 关键组件：
-     * 1. DaoAuthenticationProvider: 基于 UserDetailsService 的认证提供者
-     * 2. RedisRequestCache: 将 OAuth2 参数保存到 Redis，避免会话丢失
-     * 3. CustomAuthenticationSuccessHandler: 认证成功后跳转到授权端点
+     * <p>关键组件：</p>
+     * <ol>
+     *     <li>DaoAuthenticationProvider: 基于 UserDetailsService 的认证提供者</li>
+     *     <li>RedisRequestCache: 将 OAuth2 参数保存到 Redis，避免会话丢失</li>
+     *     <li>CustomAuthenticationSuccessHandler: 认证成功后跳转到授权端点</li>
+     * </ol>
      *
      * @param http HttpSecurity 配置对象
      * @param userDetailsService 自定义用户详情服务
@@ -141,16 +177,21 @@ public class OAuth2AuthorizationServerConfig {
     /**
      * OAuth2 授权服务器安全过滤器链（优先级：2）
      *
-     * 职责：
-     * - 保护 OAuth2 端点（/oauth2/authorize, /oauth2/token 等）
-     * - 应用 Spring Authorization Server 的默认安全配置
-     * - 添加自定义的 OAuth2StateAuthenticationFilter
-     * - 配置未认证时的重定向行为
-     * 关键特性：
-     * 1. 使用 OAuth2AuthorizationServerConfiguration.applyDefaultSecurity() 应用标准配置
-     * 2. 通过 RedisRequestCache 保持 OAuth2 参数持久化
-     * 3. 未认证时重定向到 /login 并保留所有 OAuth2 参数
-     * 4. 支持 OIDC (OpenID Connect)
+     * <p>职责：</p>
+     * <ul>
+     *     <li>保护 OAuth2 端点（/oauth2/authorize, /oauth2/token 等）</li>
+     *     <li>应用 Spring Authorization Server 的默认安全配置</li>
+     *     <li>添加自定义的 OAuth2StateAuthenticationFilter</li>
+     *     <li>配置未认证时的重定向行为</li>
+     * </ul>
+     * 
+     * <p>关键特性：</p>
+     * <ol>
+     *     <li>使用 OAuth2AuthorizationServerConfiguration.applyDefaultSecurity() 应用标准配置</li>
+     *     <li>通过 RedisRequestCache 保持 OAuth2 参数持久化</li>
+     *     <li>未认证时重定向到 /login 并保留所有 OAuth2 参数</li>
+     *     <li>支持 OIDC (OpenID Connect)</li>
+     * </ol>
      *
      * @param redisRequestCache Redis 请求缓存
      * @param http HttpSecurity 配置对象
@@ -194,14 +235,15 @@ public class OAuth2AuthorizationServerConfig {
             .authenticationEntryPoint((request, response, authException) -> {
                 // 获取原始查询参数
                 String queryString = request.getQueryString();
+                String state = request.getParameter("state");
                 // 构建登录页面重定向 URL
                 String redirectUrl = gatewayBaseUrl + "/login";
-                if (queryString != null && !queryString.isEmpty()) {
-                    // 附加所有 OAuth2 参数
-                    redirectUrl += "?" + queryString;
+                if (state != null && !state.isEmpty()) {
+                    // 只附加 state 参数
+                    redirectUrl += "?state=" + state;
                 }
 
-                log.info("Redirecting to login with params: {}", redirectUrl);
+                log.info("正在重定向到登录页面，携带 OAuth2 参数：{}", redirectUrl);
                 response.sendRedirect(redirectUrl);
             })
         );
@@ -221,12 +263,14 @@ public class OAuth2AuthorizationServerConfig {
     /**
      * OAuth2 授权服务器设置 Bean
      *
-     * 配置授权服务器的端点路径和发行者标识
+     * <p>配置授权服务器的端点路径和发行者标识</p>
      *
-     * 关键配置：
-     * - issuer: OAuth2 Token 的发行者标识
-     *   格式：{gateway-base-url}/oauth2
-     *   例如：http://localhost:8080/oauth2
+     * <p>关键配置：</p>
+     * <ul>
+     *     <li>issuer: OAuth2 Token 的发行者标识<br/>
+     *         格式：{gateway-base-url}/oauth2<br/>
+     *         例如：http://localhost:8080/oauth2</li>
+     * </ul>
      *
      * @return AuthorizationServerSettings 配置对象
      */
@@ -240,69 +284,28 @@ public class OAuth2AuthorizationServerConfig {
     /**
      * JWK (JSON Web Key) 源配置 Bean
      *
-     * 功能：
-     * - 生成和管理 RSA 密钥对
-     * - 提供公钥给客户端用于验证 JWT Token 签名
-     * - 端点：/oauth2/jwks
+     * <p>功能：</p>
+     * <ul>
+     *     <li>从文件加载或生成 RSA 密钥对</li>
+     *     <li>提供公钥给客户端用于验证 JWT Token 签名</li>
+     *     <li>端点：/oauth2/jwks</li>
+     * </ul>
      *
-     * 技术细节：
-     * - 使用 RSA-2048 位密钥
-     * - 通过 JWKSet 格式暴露公钥
-     * - 符合 JWS (JSON Web Signature) 规范
+     * <p>技术细节：</p>
+     * <ul>
+     *     <li>使用 RSA-2048 位密钥</li>
+     *     <li>通过 JWKSet 格式暴露公钥</li>
+     *     <li>符合 JWS (JSON Web Signature) 规范</li>
+     *     <li>密钥对持久化到文件，避免每次重启都生成新密钥</li>
+     * </ul>
      *
-     * @return JWKSource<SecurityContext> JWK 源
+     * @return JWKSource&lt;SecurityContext&gt; JWK 源
      */
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
-        // todo 从数据库或文件加载已存在的密钥对
-        RSAKey rsaKey = generateRsaKey();
+        RSAKey rsaKey = RsaKeyUtil.loadOrGenerateRsaKey();
         JWKSet jwkSet = new JWKSet(rsaKey);
         return new ImmutableJWKSet<>(jwkSet);
     }
 
-    /**
-     * 生成 RSA 密钥对
-     *
-     * 过程：
-     * 1. 调用 generateKeyPair() 生成 RSA 密钥对
-     * 2. 提取公钥和私钥
-     * 3. 使用 RSAKey.Builder 构建 JWK 格式的密钥
-     * 4. 设置唯一的 keyID（用于密钥轮换）
-     *
-     * @return RSAKey JWK 格式的 RSA 密钥
-     */
-    private RSAKey generateRsaKey() {
-        KeyPair keyPair = generateKeyPair();
-        RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
-        RSAPrivateKey privateKey = (RSAPrivateKey) keyPair.getPrivate();
-        return new RSAKey.Builder(publicKey)
-            .privateKey(privateKey)
-            .keyID(UUID.randomUUID().toString())
-            .build();
-    }
-
-    /**
-     * 生成 RSA 密钥对
-     *
-     * 使用 Java Cryptography Architecture (JCA) 生成 2048 位 RSA 密钥对
-     *
-     * 安全性说明：
-     * - 2048 位是当前推荐的最小密钥长度
-     * - 对于更高安全需求，可考虑 3072 或 4096 位
-     *
-     * @return KeyPair RSA 公私钥对
-     * @throws IllegalStateException 密钥生成失败时抛出
-     */
-    private KeyPair generateKeyPair() {
-        try {
-            // 获取 RSA 算法的 KeyPairGenerator 实例
-            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-            // 初始化密钥长度为 2048 位
-            keyPairGenerator.initialize(2048);
-            // 生成密钥对
-            return keyPairGenerator.generateKeyPair();
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to generate RSA key pair", e);
-        }
-    }
 }

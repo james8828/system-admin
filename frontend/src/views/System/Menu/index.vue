@@ -87,8 +87,22 @@ const handleEdit = (row: MenuInfo) => {
   ElMessage.info(`编辑菜单：${row.menuName}`)
 }
 
-const handleDelete = (row: MenuInfo) => {
-  ElMessage.info(`删除菜单：${row.menuName}`)
+const handleDelete = async (row: MenuInfo) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除菜单"${row.menuName}"吗？`, '警告', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    
+    await menuApi.deleteMenu(row.menuId)
+    ElMessage.success('删除成功')
+    getList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Delete failed:', error)
+    }
+  }
 }
 
 onMounted(() => {

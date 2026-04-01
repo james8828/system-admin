@@ -15,13 +15,28 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 基于 Redis 的请求缓存，实现无状态的 OAuth2 PKCE 授权
- * <p>
- * 核心思路：
- * 1. 使用 OAuth2 标准 state 参数作为唯一标识，替代传统的 Session
- * 2. 将 OAuth2 授权参数存储到 Redis，设置合理的过期时间
- * 3. 登录成功后，通过 state 恢复授权参数
- * </p>
+ * 基于 Redis 的 OAuth2 授权请求缓存
+ * 
+ * <p>核心功能：</p>
+ * <ul>
+ *     <li>使用 OAuth2 标准 state 参数作为唯一标识，实现无状态授权</li>
+ *     <li>将 OAuth2 授权参数存储到 Redis，设置 10 分钟过期时间</li>
+ *     <li>登录成功后，通过 state 恢复授权参数，完成 OAuth2 流程</li>
+ *     <li>支持 PKCE 模式，存储 code_challenge、code_verifier 等参数</li>
+ * </ul>
+ * 
+ * <p>工作流程：</p>
+ * <ol>
+ *     <li>用户访问 OAuth2 授权端点，携带 state 等参数</li>
+ *     <li>saveRequest() 方法将参数保存到 Redis</li>
+ *     <li>用户登录后，updateAuthenticationStatusByState() 标记为已认证</li>
+ *     <li>getRequest() 方法恢复授权参数，重定向回授权端点</li>
+ *     <li>授权完成后，removeRequest() 清理 Redis 数据</li>
+ * </ol>
+ * 
+ * @author mu
+ * @version 1.0
+ * @since 2026/4/1
  */
 @Slf4j
 @Component
@@ -35,25 +50,31 @@ public class RedisRequestCache implements RequestCache {
     private RedisTemplate<String, Object> commonRedisTemplate;
 
     /**
-     * 保存授权请求参数到 Redis
+     * 保存 OAuth2 授权请求参数到 Redis
+     * 
+     * <p>调用时机：用户首次访问 OAuth2 授权端点时</p>
+     * <p>保存内容：response_type, client_id, redirect_uri, scope, state, code_challenge 等</p>
+     * <p>过期时间：10 分钟</p>
+     * 
+     * @param request HTTP 请求对象
+     * @param response HTTP 响应对象
      */
     @Override
     public void saveRequest(HttpServletRequest request, HttpServletResponse response) {
         String state = extractStateFromRequest(request);
 
         if (state == null || state.isEmpty()) {
-            log.warn("Missing state parameter, cannot save request");
+            log.warn("缺少 state 参数，无法保存 OAuth2 授权请求");
             return;
         }
 
         // 检查 Redis 中是否已存在该 state 的数据
         AuthorizationParams existingParams = getAuthorizationParamsFromRedis(state);
         if (existingParams != null) {
-            log.info("Authorization params already exist for state: {}, authenticated: {}",
-                    state, existingParams.getAuthenticated());
+            log.info("State [{}] 的授权参数已存在，认证状态：{}", state, existingParams.getAuthenticated());
             // 如果已存在且已认证，直接返回，不要覆盖
             if (Boolean.TRUE.equals(existingParams.getAuthenticated())) {
-                log.info("User already authenticated, skipping saveRequest");
+                log.info("用户已认证，跳过保存请求");
                 return;
             }
         }
@@ -75,21 +96,24 @@ public class RedisRequestCache implements RequestCache {
         String fullUrl = buildFullUrl(request);
         params.setOriginalUrl(fullUrl);
 
-        // 存储到 Redis，使用 state 作为 key，设置过期时间
+        // 存储到 Redis，使用 state 作为 key，设置 10 分钟过期时间
         commonRedisTemplate.opsForValue().set(buildRedisKey(state), params, EXPIRE_MINUTES, TimeUnit.MINUTES);
 
-        log.info("Saved OAuth2 authorization params to Redis with state: {}", state);
-        log.debug("Authorization params saved: response_type={}, client_id={}, redirect_uri={}, state={}, code_challenge={}",
+        log.info("已将 OAuth2 授权参数保存到 Redis，state: {}", state);
+        log.debug("保存的参数详情：response_type={}, client_id={}, redirect_uri={}, state={}, code_challenge={}",
                 params.getResponseType(), params.getClientId(), params.getRedirectUri(), params.getState(), params.getCodeChallenge());
     }
 
     /**
-     * 构建完整的请求 URL
+     * 构建完整的请求 URL（包含查询参数）
+     * 
+     * @param request HTTP 请求对象
+     * @return 完整的 URL 字符串
      */
     private String buildFullUrl(HttpServletRequest request) {
         StringBuffer requestURL = request.getRequestURL();
         if (requestURL == null) {
-            log.warn("Request URL is null");
+            log.warn("请求 URL 为 null");
             return "";
         }
 
@@ -104,7 +128,10 @@ public class RedisRequestCache implements RequestCache {
     }
 
     /**
-     * 从 Redis 获取 AuthorizationParams（通过 state 自动构建 Redis Key）
+     * 从 Redis 获取授权参数（通过 state 自动构建 Redis Key）
+     * 
+     * @param state OAuth2 state 参数
+     * @return 授权参数对象，不存在或类型不匹配时返回 null
      */
     public AuthorizationParams getAuthorizationParamsFromRedis(String state) {
         String redisKey = buildRedisKey(state);
@@ -115,21 +142,27 @@ public class RedisRequestCache implements RequestCache {
         }
         // 如果是其他类型，记录警告
         if (obj != null) {
-            log.warn("Unexpected type in Redis for key {}: {}. Expected AuthorizationParams.",
+            log.warn("Redis 中键 [{}] 的数据类型异常：{}，期望类型：AuthorizationParams",
                     redisKey, obj.getClass().getSimpleName());
         }
         return null;
     }
 
     /**
-     * 构建 Redis Key
+     * 根据 state 构建 Redis Key
+     * 
+     * @param state OAuth2 state 参数
+     * @return Redis 键名
      */
     private String buildRedisKey(String state) {
         return REDIS_KEY_PREFIX + state;
     }
 
     /**
-     * 从请求中提取 state 参数
+     * 从 HTTP 请求中提取 state 参数
+     * 
+     * @param request HTTP 请求对象
+     * @return state 参数值，不存在返回 null
      */
     private String extractStateFromRequest(HttpServletRequest request) {
         // 优先从请求参数获取
@@ -138,21 +171,27 @@ public class RedisRequestCache implements RequestCache {
             return state;
         }
         return null;
-
     }
 
     /**
-     * 从 Redis 恢复授权请求参数，并标记为已认证
+     * 从 Redis 恢复 OAuth2 授权请求参数
+     * 
+     * <p>调用时机：用户登录成功后，需要重定向回 OAuth2 授权端点时</p>
+     * <p>返回值：封装了授权参数的 SavedRequest 对象，用于构建重定向 URL</p>
+     * 
+     * @param request HTTP 请求对象
+     * @param response HTTP 响应对象
+     * @return SavedRequest 对象，如果找不到参数返回 null
      */
     @Override
     public SavedRequest getRequest(HttpServletRequest request, HttpServletResponse response) {
-        log.debug("Attempting to restore OAuth2 request. Request URI: {}", request.getRequestURI());
+        log.debug("尝试恢复 OAuth2 授权请求，请求 URI: {}", request.getRequestURI());
 
         // 尝试从请求参数中获取 state（POST /login 时从隐藏字段获取）
         String state = extractStateFromRequest(request);
 
         if (state == null || state.isEmpty()) {
-            log.warn("No state parameter found in request parameters or cookies, cannot restore request");
+            log.warn("在请求参数或 Cookie 中未找到 state 参数，无法恢复授权请求");
             return null;
         }
 
@@ -160,33 +199,37 @@ public class RedisRequestCache implements RequestCache {
         AuthorizationParams params = getAuthorizationParamsFromRedis(state);
 
         if (params == null) {
-            log.warn("Authorization params not found in Redis for state: {}", state);
+            log.warn("在 Redis 中未找到 state [{}] 的授权参数", state);
             return null;
         }
 
-        log.info("Restored OAuth2 authorization params from Redis with state: {} and marked as authenticated", state);
-        log.debug("Authorization params after update: response_type={}, client_id={}, redirect_uri={}, authenticated={}",
+        log.info("已从 Redis 恢复 OAuth2 授权参数，state: {}，标记为已认证", state);
+        log.debug("恢复的参数详情：response_type={}, client_id={}, redirect_uri={}, authenticated={}",
                 params.getResponseType(), params.getClientId(), params.getRedirectUri(), params.getAuthenticated());
 
-        // 创建 SavedRequest 对象
+        // 创建 SavedRequest 对象，用于后续重定向
         return new RedisSavedRequest(params);
     }
 
     /**
-     * 根据 state 直接更新认证状态
-     *
-     * @param state         OAuth2 state 参数
-     * @param authenticated 认证状态
+     * 根据 state 更新用户认证状态
+     * 
+     * <p>调用时机：用户登录成功后</p>
+     * <p>作用：标记 Redis 中的授权参数为已认证，并保存用户名</p>
+     * 
+     * @param state OAuth2 state 参数
+     * @param principal 用户名（principal）
+     * @param authenticated 认证状态（true=已认证）
      * @return 是否更新成功
      */
     public boolean updateAuthenticationStatusByState(String state, String principal, boolean authenticated) {
         if (state == null || state.isEmpty()) {
-            log.warn("Invalid state parameter");
+            log.warn("无效的 state 参数");
             return false;
         }
         AuthorizationParams params = getAuthorizationParamsFromRedis(state);
         if (params == null) {
-            log.warn("AuthorizationParams not found for state: {}", state);
+            log.warn("未找到 state [{}] 对应的授权参数", state);
             return false;
         }
         params.setAuthenticated(authenticated);
@@ -194,7 +237,7 @@ public class RedisRequestCache implements RequestCache {
         String redisKey = buildRedisKey(state);
         commonRedisTemplate.opsForValue().set(redisKey, params, EXPIRE_MINUTES, TimeUnit.MINUTES);
 
-        log.info("Updated authentication status to {} for state: {}", authenticated, state);
+        log.info("已更新 state [{}] 的认证状态为：{}，用户：{}", state, authenticated, principal);
         return true;
     }
 
@@ -205,7 +248,12 @@ public class RedisRequestCache implements RequestCache {
     }
 
     /**
-     * 移除已使用的授权参数
+     * 移除已使用的 OAuth2 授权参数
+     * 
+     * <p>调用时机：OAuth2 授权流程完成后，清理临时数据</p>
+     * 
+     * @param request HTTP 请求对象
+     * @param response HTTP 响应对象
      */
     @Override
     public void removeRequest(HttpServletRequest request, HttpServletResponse response) {
@@ -213,13 +261,21 @@ public class RedisRequestCache implements RequestCache {
         if (state != null && !state.isEmpty()) {
             String redisKey = buildRedisKey(state);
             commonRedisTemplate.delete(redisKey);
-            log.info("Removed OAuth2 authorization params from Redis with state: {}", state);
+            log.info("已从 Redis 移除 OAuth2 授权参数，state: {}", state);
         }
     }
 
 
     /**
      * OAuth2 授权参数封装类
+     * 
+     * <p>用于存储 OAuth2 授权请求的所有参数，包括：</p>
+     * <ul>
+     *     <li>基础参数：response_type, client_id, redirect_uri, scope</li>
+     *     <li>PKCE 参数：code_challenge, code_challenge_method, code_verifier</li>
+     *     <li>状态参数：state, authenticated, principal</li>
+     *     <li>辅助信息：originalUrl, registeredClient</li>
+     * </ul>
      */
     @Data
     public static class AuthorizationParams implements java.io.Serializable {
@@ -240,7 +296,10 @@ public class RedisRequestCache implements RequestCache {
     }
 
     /**
-     * SavedRequest 实现，用于恢复授权请求
+     * SavedRequest 实现类，用于恢复 OAuth2 授权请求
+     * 
+     * <p>封装了从 Redis 中恢复的授权参数，提供 Spring Security 标准接口</p>
+     * <p>主要用于构建重定向 URL 和恢复请求参数</p>
      */
     public static class RedisSavedRequest implements SavedRequest {
         private final AuthorizationParams params;
