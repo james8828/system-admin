@@ -14,7 +14,7 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * 跨域配置（CORS）
+ * 跨域配置（CORS - Cross-Origin Resource Sharing）
  * 
  * <p>由于 Gateway 基于 WebFlux，需要使用响应式的 CORS 配置</p>
  * 
@@ -27,21 +27,33 @@ import reactor.core.publisher.Mono;
  *     <li>预检请求缓存时间：3600 秒</li>
  * </ul>
  * 
- * <h3>安全提示：</h3>
- * <ul>
- *     <li>生产环境应该设置 allowedOrigins 为具体域名</li>
- *     <li>不要使用 "*" 同时允许携带凭证（会冲突）</li>
- * </ul>
+ * <h3>CORS 处理流程：</h3>
+ * <ol>
+ *     <li>浏览器检测到跨域请求，发送 OPTIONS 预检请求</li>
+ *     <li>网关返回 CORS 响应头，告知浏览器允许的源、方法、头信息</li>
+ *     <li>浏览器验证通过后，发送实际请求</li>
+ *     <li>网关在响应中添加 CORS 头，允许前端访问响应数据</li>
+ * </ol>
  * 
- * @author JNet Team
+ * <h3>🔒 安全提示：</h3>
+ * <ul>
+ *     <li>生产环境应该设置 allowedOrigins 为具体域名，避免使用 "*"</li>
+ *     <li>不要使用 "*" 同时允许携带凭证（会冲突）</li>
+ *     <li>建议限制 Access-Control-Allow-Methods 为实际需要的方法</li>
+ * </ul>
+ *
+ * @author mu
  * @version 1.0
- * @since 2024-01-01
+ * @since 2026/4/1
  */
 @Configuration
-public class CorsConfig {
+public class
+CorsConfig {
 
     /**
      * 全局 CORS 过滤器
+     * 
+     * <p>处理所有跨域请求，添加必要的 CORS 响应头</p>
      * 
      * @return WebFilter 实例
      */

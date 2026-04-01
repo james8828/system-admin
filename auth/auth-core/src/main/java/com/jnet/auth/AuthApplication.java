@@ -18,6 +18,11 @@ public class AuthApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(AuthApplication.class, args);
+        System.out.println("========================================");
+        System.out.println("    JNet 认证服务启动成功！");
+        System.out.println("    OAuth2 授权端点：http://localhost:8081/oauth2/authorize");
+        System.out.println("    Token 端点：http://localhost:8081/oauth2/token");
+        System.out.println("========================================");
     }
 
 }

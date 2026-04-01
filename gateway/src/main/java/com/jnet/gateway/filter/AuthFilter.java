@@ -46,9 +46,9 @@ import static com.jnet.common.constant.Constants.TRACE_ID_HEADER;
  *     <li>可以通过配置 enable-token-check 来控制是否启用验证</li>
  * </ul>
  *
- * @author JNet Team
- * @version 2.0 (增强验证)
- * @since 2024-01-01
+ * @author mu
+ * @version 1.0
+ * @since 2026/4/1
  */
 @Slf4j
 @Component
@@ -88,13 +88,13 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
         // ========== 步骤 1: 检查是否需要跳过验证 ==========
         if (shouldSkip(path)) {
-            log.debug("[Trace] [Gateway] [{}] Skip auth for path: {}", traceId, path);
+            log.debug("[Trace] [Gateway] [{}] 跳过路径 {} 的认证", traceId, path);
             return chain.filter(exchange);
         }
 
         // ========== 步骤 2: 如果不启用 Token 验证，直接放行 ==========
         if (!gatewayAuthProperties.isEnableTokenCheck()) {
-            log.debug("[Trace] [Gateway] [{}] Token check disabled, allow path: {}", traceId, path);
+            log.debug("[Trace] [Gateway] [{}] Token 验证已禁用，放行路径 {}", traceId, path);
             return chain.filter(exchange);
         }
 
@@ -103,7 +103,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
         // ========== 步骤 4: 验证 Token 基础格式 ==========
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            log.warn("[Trace] [Gateway] [{}] Missing or invalid Authorization header for path: {}", traceId, path);
+            log.warn("[Trace] [Gateway] [{}] 路径 {} 缺少或无效的 Authorization header", traceId, path);
             return onError(exchange, HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");
         }
 
@@ -111,13 +111,13 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
         // ========== 步骤 5: 验证 Token 非空 ==========
         if (token.trim().isEmpty()) {
-            log.warn("[Trace] [Gateway] [{}] Empty token for path: {}", traceId, path);
+            log.warn("[Trace] [Gateway] [{}] 路径 {} 的 Token 为空", traceId, path);
             return onError(exchange, HttpStatus.UNAUTHORIZED, "Empty token");
         }
 
         // ========== 步骤 6: 验证 JWT 格式 ==========
         if (!JWT_PATTERN.matcher(token).matches()) {
-            log.warn("[Trace] [Gateway] [{}] Invalid JWT format for path: {}", traceId, path);
+            log.warn("[Trace] [Gateway] [{}] 路径 {} 的 JWT 格式无效", traceId, path);
             return onError(exchange, HttpStatus.UNAUTHORIZED, "Invalid JWT format");
         }
 
@@ -129,12 +129,12 @@ public class AuthFilter implements GlobalFilter, Ordered {
                     // 转换为北京时间（+8 时区）格式
                     String expiryTimeStr = expiryTime.atZone(ZoneId.of("Asia/Shanghai"))
                             .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                    log.warn("[Trace] [Gateway] [{}] Token expired for path: {}, expiry: {}", traceId, path, expiryTimeStr);
+                    log.warn("[Trace] [Gateway] [{}] 路径 {} 的 Token 已过期，过期时间：{}", traceId, path, expiryTimeStr);
                     return onError(exchange, HttpStatus.UNAUTHORIZED, "Token has expired");
                 }
-                log.debug("[Trace] [Gateway] [{}] Token not expired, expiry: {}", traceId, expiryTime);
+                log.debug("[Trace] [Gateway] [{}] Token 未过期，过期时间：{}", traceId, expiryTime);
             } catch (Exception e) {
-                log.warn("[Trace] [Gateway] [{}] Failed to parse token expiry for path: {}, error: {}", traceId, path, e.getMessage());
+                log.warn("[Trace] [Gateway] [{}] 路径 {} 解析 Token 过期时间失败：{}", traceId, path, e.getMessage());
                 // 解析失败不阻断，继续后续流程
             }
         }
@@ -146,15 +146,17 @@ public class AuthFilter implements GlobalFilter, Ordered {
         // }
 
         // ========== 步骤 9: 验证通过，继续过滤器链 ==========
-        log.debug("[Trace] [Gateway] [{}] Token validation passed for path: {}", traceId, path);
+        log.debug("[Trace] [Gateway] [{}] 路径 {} 的 Token 验证通过", traceId, path);
         return chain.filter(exchange);
     }
 
     /**
      * 从 JWT Token 中解析过期时间
      *
+     * <p>JWT 结构：header.payload.signature，本方法解码 payload 部分并提取 exp 字段</p>
+     *
      * @param token JWT Token
-     * @return 过期时间戳，如果无法解析返回 null
+     * @return 过期时间戳（秒），如果无法解析返回 null
      */
     private Instant parseTokenExpiry(String token) {
         try {
@@ -197,7 +199,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
             return Instant.ofEpochSecond(expTimestamp);
         } catch (Exception e) {
-            log.debug("Failed to parse token expiry: {}", e.getMessage());
+            log.debug("解析 Token 过期时间失败：{}", e.getMessage());
             return null;
         }
     }
@@ -219,6 +221,8 @@ public class AuthFilter implements GlobalFilter, Ordered {
     /**
      * 检查路径是否应该跳过验证
      * 
+     * <p>使用 Ant 风格的路径匹配器进行匹配</p>
+     * 
      * @param path 请求路径
      * @return true-跳过验证，false-需要验证
      */
@@ -227,18 +231,20 @@ public class AuthFilter implements GlobalFilter, Ordered {
         if (skipPaths == null || skipPaths.isEmpty()) {
             return false;
         }
-
+    
         for (String skipPath : skipPaths) {
             if (pathMatcher.match(skipPath, path)) {
                 return true;
             }
         }
-
+    
         return false;
     }
-
+    
     /**
      * 错误响应处理
+     * 
+     * <p>返回统一的 JSON 格式错误响应</p>
      * 
      * @param exchange 请求上下文
      * @param status HTTP 状态码
@@ -249,7 +255,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(status);
         response.getHeaders().add("Content-Type", "application/json;charset=UTF-8");
-        
+            
         String body = String.format("{\"code\":%d,\"message\":\"%s\"}", status.value(), message);
         return response.writeWith(Mono.just(response.bufferFactory().wrap(body.getBytes())));
     }

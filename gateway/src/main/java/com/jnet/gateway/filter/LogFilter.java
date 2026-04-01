@@ -22,7 +22,8 @@ import static com.jnet.common.constant.Constants.TRACE_ID_HEADER;
  * <h3>主要功能：</h3>
  * <ul>
  *     <li>生成全局唯一的 Trace ID（与 GatewayTraceFilter 配合）</li>
- *     <li>记录请求方法、路径、耗时等信息</li>
+ *     <li>记录请求方法、路径等信息</li>
+ *     <li>记录响应状态码和耗时</li>
  *     <li>将 Trace ID 传递到下游服务</li>
  *     <li>便于问题排查和链路追踪</li>
  * </ul>
@@ -36,10 +37,10 @@ import static com.jnet.common.constant.Constants.TRACE_ID_HEADER;
  *     <li>下游服务在日志中输出相同的 Trace ID</li>
  *     <li>通过 Trace ID 可以在日志系统中追踪完整的调用链</li>
  * </ol>
- * 
- * @author JNet Team
- * @version 2.0 (使用统一 Trace ID)
- * @since 2024-01-01
+ *
+ * @author mu
+ * @version 1.0
+ * @since 2026/4/1
  */
 @Slf4j
 @Component
@@ -58,7 +59,7 @@ public class LogFilter implements GlobalFilter, Ordered {
         if (traceId == null || traceId.isEmpty()) {
             // 如果没有则生成新的（正常情况下应该由 GatewayTraceFilter 设置）
             traceId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-            log.warn("[Trace] [Gateway] [{}] TraceId not found in request, generated new one", traceId);
+            log.warn("[Trace] [Gateway] [{}] 请求中未找到 TraceId，已生成新的", traceId);
         }
         final String finalTraceId = traceId;
 
@@ -69,7 +70,7 @@ public class LogFilter implements GlobalFilter, Ordered {
         // GatewayTraceFilter 已经添加了 Trace ID 到请求头
 
         // ========== 步骤 4: 记录请求日志（包含 Trace ID） ==========
-        log.info("[Trace] [Gateway] [{}] Request: {} {}",
+        log.info("[Trace] [Gateway] [{}] 收到请求：{} {}",
                 finalTraceId,
                 request.getMethod(),
                 request.getPath());
@@ -80,7 +81,7 @@ public class LogFilter implements GlobalFilter, Ordered {
                     long endTime = System.currentTimeMillis();
                     long duration = endTime - startTime;
                     
-                    log.info("[Trace] [Gateway] [{}] Response: {} - {}ms",
+                    log.info("[Trace] [Gateway] [{}] 响应完成：{} - 耗时 {}ms",
                             finalTraceId,
                             exchange.getResponse().getStatusCode(),
                             duration);
