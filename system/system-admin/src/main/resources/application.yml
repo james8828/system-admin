@@ -1,0 +1,87 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: jnet-system-admin
+  profiles:
+    active: dev
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/jnet
+    username: postgres
+    password: 123456
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  data:
+    redis:
+      database: 10
+      host: 192.168.160.103
+      port: 6379
+      password: shengtong
+      timeout: 5000ms
+  cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
+        server-addr: 192.168.52.108:8848
+        file-extension: yaml
+      discovery:
+        server-addr: 192.168.52.108:8848
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    use-generated-keys: true
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: delFlag
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+logging:
+  level:
+    root: INFO
+    com.jnet: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.security.web: TRACE
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.web.authentication: DEBUG
+    org.springframework.security.authentication: DEBUG
+    org.springframework.security.oauth2.server.authorization: DEBUG
+    com.jnet.common.security: DEBUG
+    com.jnet.common.trace: DEBUG
+    # 添加 Feign 的日志级别
+    feign.Logger: DEBUG
+    com.jnet.system.api.client: DEBUG
+    # 🔥 开启 Feign 完整日志
+    feign.codec: DEBUG
+    org.springframework.cloud.openfeign: DEBUG
+
+# 添加 Feign Client 的详细日志配置
+feign:
+  client:
+    config:
+      default:
+        loggerLevel: HEADERS  # 🔥 打印请求头和响应头
+        connectTimeout: 5000  # 连接超时时间（毫秒）
+        readTimeout: 10000    # 读取超时时间（毫秒）
+
+
+jnet:
+  tenant:
+    enabled: false
+    exclude-tables: sys_user,sys_role,sys_menu,sys_dept,sys_oper_log
+  # 内部服务认证配置
+  internal-auth:
+    enabled: true
+    secret: internal-service-secret-2024
+    allowed-services: jnet-auth,jnet-gateway,jnet-resource

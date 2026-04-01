@@ -1,0 +1,182 @@
+### 系统管理 - 用户管理 API 测试
+
+@baseUrl = http://localhost:8080
+@authUrl = http://localhost:8082
+@systemUrl = {{baseUrl}}/api/system
+
+###############################################
+# OAuth2 认证配置
+###############################################
+
+@clientId = jnet-client
+@clientSecret = jnet-secret
+
+# Client Credentials 模式获取的 Access Token
+@clientCredentialsToken = eyJraWQiOiJhMTk3MTBiOC05NDQyLTQ4YWItYWQyOS0yMjIwZjMwNWQ4OGQiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJqbmV0LWNsaWVudCIsImF1ZCI6ImpuZXQtY2xpZW50IiwibmJmIjoxNzczNjI2MDM3LCJzY29wZSI6WyJvcGVuaWQiLCJwcm9maWxlIl0sImlzcyI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODA4MiIsImV4cCI6MTc3MzYyNjMzNywiaWF0IjoxNzczNjI2MDM3LCJqdGkiOiJjYWU1YjFkZC1iMzc4NGJjMS1hMWRhLTMyZjc4OGFmYWI3YiJ9.ACxtE9G7fPKDoTLDM1GBQ5oP2QDTz5GHrNO7YiEbTUcbFJ8ZTAH2lsMsMJiUQ_Q6ptCbeba9Wx-YugYuE9KnZCO_Al0OrHg3RxkJb4DlouXfczC-0zfNP8U8plROxp3WhF-AgyS7c6x4p5H0inzjEgCrcnUBe68GEZ81EVIr4Sumq6VG3xOCt4T2uUq0hAautwZ5Kh14laxooRNWSLAyqrhivIT2mOe2GB5bAsNAnQF7qvzxMIr8YMtAqMo9CLxufozscYPpX9MZtqO8cbF_3hRIFHQ-8BdIzonoNKvlkqxwMEFuLtO-mlZ9PzXkyemnM5BeRggdY5PvxT25ZF-Q4Q
+
+# PKCE 模式获取的 Access Token（如果有）
+@pkceToken = eyJraWQiOiIwODVhNGJjOS1hMzk5LTRjZjctOGUzYi05NjZkOGYxYTkwNDgiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhZG1pbiIsImF1ZCI6ImpuZXQtcGtjZS1jbGllbnQiLCJuYmYiOjE3NzQ5MzM4MDksInNjb3BlIjpbIm9wZW5pZCIsInByb2ZpbGUiLCJlbWFpbCJdLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwODAvb2F1dGgyIiwiZXhwIjoxNzc0OTQxMDA5LCJpYXQiOjE3NzQ5MzM4MDksImp0aSI6ImE2NWVhOTQ1LTcyODctNGI2NS1iNTg2LTZkNDA5MzM3MTg0NCJ9.cVU2BQzYcWBMs75LcrAyiKTxEFg5trDIajtI-d6vCb8ZB2so0oKdxA1Fb8cZ15oB2e7T6o-GrbAeIOP6w-zCR7HfUEgyW5bTrCILv0AwHeJucYY32NoOYGl4xwK-beCh3fIQR9E5F7JIwLCcYgF9bBY2DRnKIvU1gY_H3QsQaTWtSl5iznNxR492nmfxzb4XajaSxRnkCw0rZOoEsBs1nIJ-YXBJdoqnb8JG5Lbo9pvsh8geLohU7r_xA8TlkFiaAus5CrdohV7FOua7KMurlIq4aqi397fhN9vYVhAM8d0KjBpOIWfAFmPYVtD1ffiDbhZSzCrr6giDGT_WZSJ-Eg
+
+# 默认使用的 Token（可以切换）
+@token = {{pkceToken}}
+
+### 1. 获取用户列表（分页）
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/page?pageNum=1&pageSize=10
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 2. 根据 ID 查询用户详情
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 3. 根据用户名查询用户详情
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/username/admin
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 4. 创建新用户
+# 需要 OAuth2 Access Token 认证
+POST {{systemUrl}}/user
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "nickname": "测试用户",
+  "email": "test@example.com",
+  "phone": "13800138000",
+  "status": 1,
+  "deptId": 1,
+  "remark": "测试用户"
+}
+
+### 5. 更新用户信息
+# 需要 OAuth2 Access Token 认证
+PUT {{systemUrl}}/user
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "username": "admin",
+  "nickname": "管理员",
+  "email": "admin@example.com",
+  "phone": "13900139000",
+  "status": 1,
+  "remark": "系统管理员"
+}
+
+### 6. 删除单个用户
+# 需要 OAuth2 Access Token 认证
+DELETE {{systemUrl}}/user/2
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 7. 批量删除用户
+# 需要 OAuth2 Access Token 认证
+DELETE {{systemUrl}}/user/batch
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+[2, 3, 4]
+
+### 8. 重置用户密码
+# 需要 OAuth2 Access Token 认证
+POST {{systemUrl}}/user/1/resetPwd
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+"newPassword123"
+
+### 9. 启用/禁用用户
+# 需要 OAuth2 Access Token 认证
+PUT {{systemUrl}}/user/1/enable
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+true
+
+### 10. 组合测试场景
+
+### 10.1 完整流程：创建 → 查询 → 更新 → 删除
+# 步骤 1: 创建用户
+# POST {{systemUrl}}/user
+# Content-Type: application/json
+# {
+#   "username": "flowtest",
+#   "nickname": "流程测试",
+#   "email": "flow@example.com",
+#   "status": 1
+# }
+
+# 步骤 2: 查询创建的用户
+# GET {{systemUrl}}/user/username/flowtest
+
+# 步骤 3: 更新用户信息
+# PUT {{systemUrl}}/user
+# Content-Type: application/json
+# {
+#   "userId": <从上一步获取>,
+#   "username": "flowtest",
+#   "nickname": "流程测试 - 已更新",
+#   "email": "flow_updated@example.com"
+# }
+
+# 步骤 4: 删除用户
+# DELETE {{systemUrl}}/user/<userId>
+
+### 11. 错误场景测试
+
+### 11.1 查询不存在的用户
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/999999
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 11.2 查询不存在的用户名
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/username/nonexistent
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 11.3 创建重复用户名的用户
+# 需要 OAuth2 Access Token 认证
+POST {{systemUrl}}/user
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "nickname": "重复测试",
+  "email": "duplicate@example.com"
+}
+
+### 11.4 删除不存在的用户
+# 需要 OAuth2 Access Token 认证
+DELETE {{systemUrl}}/user/999999
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 12. 边界值测试
+
+### 12.1 空参数分页查询
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/page
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 12.2 第一页单条记录
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/page?pageNum=1&pageSize=1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### 12.3 大页面查询
+# 需要 OAuth2 Access Token 认证
+GET {{systemUrl}}/user/page?pageNum=1&pageSize=100
+Authorization: Bearer {{token}}
+Content-Type: application/json

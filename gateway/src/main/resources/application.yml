@@ -1,0 +1,93 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: jnet-gateway
+  main:
+    web-application-type: reactive
+  cloud:
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: 192.168.52.108:8848
+    gateway:
+      # 全局 CORS 配置
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedHeaders: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            maxAge: 3600
+      routes:
+        # Auth 服务路由
+        - id: auth-route
+          uri: lb://jnet-auth
+          predicates:
+            - Path=/oauth2/**, /api/auth/**, /login, /logout
+          filters:
+            - StripPrefix=0
+        
+        # System 服务路由
+        - id: system-route
+          uri: lb://jnet-system-admin
+          predicates:
+            - Path=/api/system/**
+          filters:
+            - StripPrefix=0
+        
+        # 前端静态资源（可选）
+        - id: frontend-route
+          uri: http://localhost:5173
+          predicates:
+            - Path=/
+          filters:
+            - RewritePath=/, /index.html
+      
+      # 默认过滤器
+      default-filters: []
+      
+      # 路由发现（从 Nacos 自动发现服务）
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+logging:
+  level:
+    root: INFO
+    com.jnet: INFO
+    org.springframework.cloud: ERROR
+    org.springframework.web.reactive: ERROR
+    reactor.netty: INFO
+    com.alibaba.nacos: ERROR
+
+# 网关自定义配置
+jnet:
+  gateway:
+    auth:
+      # 是否启用 Token 验证
+      enable-token-check: true
+      # 跳过验证的路径
+      anonymous-urls:
+        - /login/**
+        - /oauth2/token
+        - /oauth2/**
+        - /oauth2/authorize
+        - /api/auth/login
+        - /actuator/**
+        - /**/*.html
+        - /**/*.js
+        - /**/*.css
+        - /**/*.png
+        - /**/*.ico
+      # Token 在 Redis 中的前缀
+      token-prefix: "token:"
+      # 是否启用 Token 过期检查
+      token-expiry-check: true

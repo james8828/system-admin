@@ -1,0 +1,68 @@
+server:
+  port: 8082
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        secure: false
+        same-site: none
+      persistent: false
+
+spring:
+  application:
+    name: jnet-auth
+  profiles:
+    active: dev
+  data:
+    redis:
+      database: 10
+      host: 192.168.160.103
+      port: 6379
+      password: shengtong
+      timeout: 5000ms
+  cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
+        server-addr: 192.168.52.108:8848
+        file-extension: yaml
+      discovery:
+        server-addr: 192.168.52.108:8848
+
+logging:
+  level:
+    root: INFO
+    com.jnet: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security.web: TRACE
+    org.springframework.security: DEBUG
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.web.authentication: DEBUG
+    org.springframework.security.authentication: DEBUG
+    org.springframework.security.oauth2.server.authorization: DEBUG
+    feign: INFO
+    com.jnet.common.trace: INFO
+
+# 内部服务认证配置
+jnet:
+  internal-auth:
+    secret: internal-service-secret-2024
+  # 链路追踪配置
+  trace:
+    enabled: true
+    logMethodExecution: true
+    logLevel: DEBUG
+  # Token 配置
+  token:
+    expire:
+      access: 7200        # Access Token 过期时间（秒）默认 2 小时
+      refresh: 604800     # Refresh Token 过期时间（秒）默认 7 天
+    redis:
+      prefix: "token:"            # Redis Token 前缀
+    blacklist:
+      prefix: "blacklist:"        # Redis 黑名单前缀
+    nonce:
+      prefix: "nonce:"            # Redis Nonce 前缀
+      expire: 300                 # Nonce 过期时间（秒）默认 5 分钟

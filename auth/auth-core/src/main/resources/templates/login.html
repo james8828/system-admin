@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JNet 系统登录</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+
+        .login-box {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .login-title {
+            font-size: 28px;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .login-subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: #aaa;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c33;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1 class="login-title">JNet 管理系统</h1>
+                <p class="login-subtitle">OAuth2 授权认证</p>
+            </div>
+
+            <div id="errorBox" class="error-message"></div>
+
+            <form id="loginForm" method="POST" action="/login">
+                <!-- 隐藏字段：保存 OAuth2 state 参数 -->
+                <input type="hidden" id="state" name="state" value="" />
+                
+                <div class="form-group">
+                    <label for="username" class="form-label">用户名</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-input" 
+                        placeholder="请输入用户名"
+                        autocomplete="username"
+                        required
+                        autofocus
+                        value="admin"
+                    />
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">密码</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-input" 
+                        placeholder="请输入密码"
+                        autocomplete="current-password"
+                        required
+                        value="admin123"
+                    />
+                </div>
+
+                <button type="submit" class="submit-btn">登录</button>
+            </form>
+
+            <div class="login-footer">
+                <p>© 2024 JNet. All rights reserved.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 检查 URL 中是否有错误参数
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
+        const errorMsg = document.getElementById('errorBox');
+        
+        // 提取 state 参数并保存到隐藏字段
+        const state = urlParams.get('state');
+        if (state) {
+            document.getElementById('state').value = state;
+        }
+
+        if (error) {
+            switch(error) {
+                case 'true':
+                    errorMsg.textContent = '用户名或密码错误';
+                    errorMsg.classList.add('show');
+                    break;
+                case 'logout':
+                    errorMsg.textContent = '您已成功退出';
+                    errorMsg.style.background = '#e8f5e9';
+                    errorMsg.style.borderColor = '#a5d6a7';
+                    errorMsg.style.color = '#2e7d32';
+                    errorMsg.classList.add('show');
+                    break;
+                case 'session':
+                    errorMsg.textContent = '会话已过期，请重新登录';
+                    errorMsg.style.background = '#fff3e0';
+                    errorMsg.style.borderColor = '#ffcc80';
+                    errorMsg.style.color = '#ef6c00';
+                    errorMsg.classList.add('show');
+                    break;
+                default:
+                    errorMsg.textContent = '登录失败，请重试';
+                    errorMsg.classList.add('show');
+            }
+        }
+
+        // 表单验证
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                e.preventDefault();
+                errorMsg.textContent = '请输入用户名和密码';
+                errorMsg.style.background = '#fee';
+                errorMsg.style.borderColor = '#fcc';
+                errorMsg.style.color = '#c33';
+                errorMsg.classList.add('show');
+                return false;
+            }
+        });
+    </script>
+</body>
+</html>

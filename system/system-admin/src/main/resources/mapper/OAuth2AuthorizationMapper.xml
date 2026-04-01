@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jnet.system.mapper.OAuth2AuthorizationMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.jnet.system.entity.OAuth2Authorization">
+        <id column="id" property="id"/>
+        <result column="registered_client_id" property="registeredClientId"/>
+        <result column="principal_name" property="principalName"/>
+        <result column="authorization_grant_type" property="authorizationGrantType"/>
+        
+        <!-- JSONB 字段 - 使用专门的 TypeHandler -->
+        <result column="authorized_scopes" property="authorizedScopes" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbSetTypeHandler"/>
+        <result column="attributes" property="attributes" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbTypeHandler"/>
+        <result column="authorization_code_metadata" property="authorizationCodeMetadata" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbTypeHandler"/>
+        <result column="access_token_metadata" property="accessTokenMetadata" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbTypeHandler"/>
+        <result column="access_token_scopes" property="accessTokenScopes" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbSetTypeHandler"/>
+        <result column="oidc_id_token_metadata" property="oidcIdTokenMetadata" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbTypeHandler"/>
+        <result column="refresh_token_metadata" property="refreshTokenMetadata" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbTypeHandler"/>
+        <result column="user_code_metadata" property="userCodeMetadata" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbTypeHandler"/>
+        <result column="device_code_metadata" property="deviceCodeMetadata" 
+                jdbcType="OTHER" typeHandler="com.jnet.system.typehandler.JsonbTypeHandler"/>
+        
+        <!-- 普通字段 -->
+        <result column="state" property="state"/>
+        <result column="authorization_code_value" property="authorizationCodeValue"/>
+        <result column="authorization_code_issued_at" property="authorizationCodeIssuedAt"/>
+        <result column="authorization_code_expires_at" property="authorizationCodeExpiresAt"/>
+        <result column="access_token_value" property="accessTokenValue"/>
+        <result column="access_token_issued_at" property="accessTokenIssuedAt"/>
+        <result column="access_token_expires_at" property="accessTokenExpiresAt"/>
+        <result column="access_token_type" property="accessTokenType"/>
+        <result column="oidc_id_token_value" property="oidcIdTokenValue"/>
+        <result column="oidc_id_token_issued_at" property="oidcIdTokenIssuedAt"/>
+        <result column="oidc_id_token_expires_at" property="oidcIdTokenExpiresAt"/>
+        <result column="refresh_token_value" property="refreshTokenValue"/>
+        <result column="refresh_token_issued_at" property="refreshTokenIssuedAt"/>
+        <result column="refresh_token_expires_at" property="refreshTokenExpiresAt"/>
+        <result column="user_code_value" property="userCodeValue"/>
+        <result column="user_code_issued_at" property="userCodeIssuedAt"/>
+        <result column="user_code_expires_at" property="userCodeExpiresAt"/>
+        <result column="device_code_value" property="deviceCodeValue"/>
+        <result column="device_code_issued_at" property="deviceCodeIssuedAt"/>
+        <result column="device_code_expires_at" property="deviceCodeExpiresAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <!-- Base_Column_List - 所有字段 -->
+    <sql id="Base_Column_List">
+        id, registered_client_id, principal_name, authorization_grant_type,
+        authorized_scopes, attributes, state,
+        authorization_code_value, authorization_code_issued_at, authorization_code_expires_at, authorization_code_metadata,
+        access_token_value, access_token_issued_at, access_token_expires_at, access_token_metadata,
+        access_token_type, access_token_scopes,
+        oidc_id_token_value, oidc_id_token_issued_at, oidc_id_token_expires_at, oidc_id_token_metadata,
+        refresh_token_value, refresh_token_issued_at, refresh_token_expires_at, refresh_token_metadata,
+        user_code_value, user_code_issued_at, user_code_expires_at, user_code_metadata,
+        device_code_value, device_code_issued_at, device_code_expires_at, device_code_metadata,
+        create_time, update_time
+    </sql>
+
+    <!-- 根据 ID 查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM oauth2_authorization
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据 Token 查询 -->
+    <select id="selectByToken" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM oauth2_authorization
+        WHERE
+        <if test="tokenType == 'access_token'">
+            access_token_value = #{tokenValue}
+        </if>
+        <if test="tokenType == 'refresh_token'">
+            refresh_token_value = #{tokenValue}
+        </if>
+        <if test="tokenType == 'code'">
+            authorization_code_value = #{tokenValue}
+        </if>
+    </select>
+
+</mapper>

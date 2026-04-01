@@ -1,0 +1,5 @@
+com.jnet.common.security.cache.PermissionCacheManager
+com.jnet.common.security.service.SecurityService
+com.jnet.common.security.config.ResourceServerConfig
+com.jnet.common.security.config.SecurityFeignConfig
+com.jnet.common.security.config.InternalAuthProperties
