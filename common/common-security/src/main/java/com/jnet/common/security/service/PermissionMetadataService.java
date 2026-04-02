@@ -2,6 +2,7 @@ package com.jnet.common.security.service;
 
 import com.jnet.common.result.Result;
 import com.jnet.common.security.cache.PermissionCacheManager;
+import com.jnet.common.security.utils.SecurityContextUtils;
 import com.jnet.common.trace.TraceContext;
 import com.jnet.system.api.client.UserPermissionFeignClient;
 import com.jnet.system.api.dto.UserPermissionDTO;
@@ -9,9 +10,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.PathMatcher;
@@ -211,7 +209,7 @@ public class PermissionMetadataService {
         }
         
         // 步骤 1: 尝试从 JWT Token claims 中获取 userId
-        Long userId = extractUserIdFromToken();
+        Long userId = SecurityContextUtils.extractUserIdFromToken();
         String username = null;
         
         if (userId != null) {
@@ -247,7 +245,7 @@ public class PermissionMetadataService {
         }
         
         // 步骤 2: 如果没有 userId，使用用户名作为降级方案
-        username = extractUsernameFromSecurityContext();
+        username = SecurityContextUtils.extractUsernameFromSecurityContext();
         if (username == null || username.isEmpty()) {
             log.debug("[Trace] [Security] [{}] 未找到认证用户，无法获取权限", traceId);
             return null;
@@ -285,113 +283,7 @@ public class PermissionMetadataService {
         return null;
     }
     
-    /**
-     * 从 JWT Token claims 中提取 userId
-     * 优先使用此方法，因为 Token 中已包含 userId
-     *
-     * @return userId，如果不存在返回 null
-     */
-    private Long extractUserIdFromToken() {
-        try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null || !authentication.isAuthenticated()) {
-                return null;
-            }
-            
-            // 情况 1: JwtAuthenticationToken（Resource Server 标准情况）
-            if (authentication instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
-                Object userIdObj = jwtAuth.getToken().getClaim("userId");
-                if (userIdObj instanceof Number) {
-                    Long userId = ((Number) userIdObj).longValue();
-                    log.debug("从 JwtAuthenticationToken 中提取到 userId={}", userId);
-                    return userId;
-                }
-                log.debug("JwtAuthenticationToken 中未找到 userId claim");
-                return null;
-            }
-            
-            // 情况 2: 尝试通过反射从任意 Authentication 的 attributes 中获取
-            // 使用反射避免依赖问题
-            try {
-                var getAttributesMethod = authentication.getClass().getMethod("getAttributes");
-                @SuppressWarnings("unchecked")
-                Map<String, Object> attributes = (Map<String, Object>) getAttributesMethod.invoke(authentication);
-                Object userIdObj = attributes.get("userId");
-                if (userIdObj instanceof Number) {
-                    Long userId = ((Number) userIdObj).longValue();
-                    log.debug("从 Authentication.attributes 中提取到 userId={}", userId);
-                    return userId;
-                }
-            } catch (NoSuchMethodException e) {
-                // 不支持 getAttributes 方法，忽略
-            }
-            
-            // 情况 3: 从 authentication details 中获取
-            if (authentication.getDetails() instanceof java.util.Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> details = (Map<String, Object>) authentication.getDetails();
-                Object userIdObj = details.get("userId");
-                if (userIdObj instanceof Number) {
-                    Long userId = ((Number) userIdObj).longValue();
-                    log.debug("从 Authentication.details 中提取到 userId={}", userId);
-                    return userId;
-                }
-            }
-            
-            log.debug("无法从 Authentication 中提取 userId，类型：{}", authentication.getClass().getSimpleName());
-            return null;
-        } catch (Exception e) {
-            log.error("Failed to extract userId from token", e);
-            return null;
-        }
-    }
-    
-    /**
-     * 从 SecurityContextHolder 中提取用户名
-     *
-     * @return 用户名，如果不存在返回 null
-     */
-    private String extractUsernameFromSecurityContext() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            String traceId = TraceContext.getTraceId();
-            if (traceId == null) {
-                traceId = "unknown";
-            }
-            log.debug("[Trace] [Security] [{}] SecurityContextHolder 中未找到认证信息", traceId);
-            return null;
-        }
-    
-        Object principal = authentication.getPrincipal();
-            
-        // 情况 1: UserDetails 类型
-        if (principal instanceof UserDetails userDetails) {
-            String traceId = TraceContext.getTraceId();
-            if (traceId == null) {
-                traceId = "unknown";
-            }
-            log.debug("[Trace] [Security] [{}] 从 UserDetails 中提取用户名：{}", traceId, userDetails.getUsername());
-            return userDetails.getUsername();
-        }
-    
-        // 情况 2: String 类型
-        if (principal instanceof String str && !str.isEmpty()) {
-            String traceId = TraceContext.getTraceId();
-            if (traceId == null) {
-                traceId = "unknown";
-            }
-            log.debug("[Trace] [Security] [{}] 从 String 中提取用户名：{}", traceId, str);
-            return str;
-        }
-    
-        // 情况 3: 其他类型
-        String traceId = TraceContext.getTraceId();
-        if (traceId == null) {
-            traceId = "unknown";
-        }
-        log.debug("[Trace] [Security] [{}] 无法从 Principal 中提取用户名 - 类型：{}", traceId, principal.getClass().getSimpleName());
-        return null;
-    }
+
 
 
 

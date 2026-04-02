@@ -25,7 +25,27 @@ import static com.jnet.common.constant.Constants.*;
 
 /**
  * 内部服务认证过滤器
- * 验证来自其他内部服务的请求
+ * 
+ * <p>验证来自其他内部服务的请求，允许通过共享密钥进行快速认证</p>
+ * 
+ * <h3>工作原理：</h3>
+ * <ol>
+ *     <li>检查请求头中是否包含内部服务认证信息（X-Service-Token, X-Service-Name）</li>
+ *     <li>验证服务名称是否在允许列表中</li>
+ *     <li>验证服务密钥是否匹配</li>
+ *     <li>认证成功后设置 SecurityContext，允许跳过 JWT 验证</li>
+ * </ol>
+ * 
+ * <h3>使用场景：</h3>
+ * <ul>
+ *     <li>Gateway → Auth Service（绕过 JWT 验证）</li>
+ *     <li>Gateway → System Service（绕过 JWT 验证）</li>
+ *     <li>微服务间的 Feign 调用</li>
+ * </ul>
+ * 
+ * @author mu
+ * @version 1.0
+ * @since 2026/4/1
  */
 @Slf4j
 @Component
@@ -51,7 +71,7 @@ public class InternalServiceAuthFilter implements Filter {
             traceId = "unknown";
         }
         
-        log.debug("[Trace] [Security] [{}] 内部服务认证检查 - 请求 URI: {}, 服务名称：{}", traceId, requestURI, serviceName);
+        log.debug("[Trace] [Security] [{}] 内部服务认证检查 - URI: {}, 服务：{}", traceId, requestURI, serviceName);
         
         // 检查是否是内部服务请求（通过检查是否存在内部服务认证头）
         boolean hasInternalServiceHeader = httpRequest.getHeader(INTERNAL_SERVICE_FLAG) != null;
@@ -83,12 +103,16 @@ public class InternalServiceAuthFilter implements Filter {
         }
         
         // 没有内部服务认证头，继续执行后续过滤器（如 JWT 验证）
-        log.debug("[Trace] [Security] [{}] 无内部服务认证头，继续执行后续过滤器", traceId);
+        log.debug("[Trace] [Security] [{}] 无内部服务认证头，继续执行 JWT 验证流程", traceId);
         chain.doFilter(request, response);
     }
     
     /**
-     * 验证内部服务
+     * 验证内部服务请求的合法性
+     * 
+     * @param token 服务密钥 Token
+     * @param serviceName 服务名称
+     * @return true-验证通过，false-验证失败
      */
     private boolean isValidInternalService(String token, String serviceName) {
         if (!StringUtils.hasText(token) || !StringUtils.hasText(serviceName)) {

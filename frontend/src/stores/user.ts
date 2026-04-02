@@ -100,19 +100,14 @@ export const useUserStore = defineStore('user', () => {
   
   /**
    * 登出
-   * 调用 /oauth2/revoke 撤销 token（会删除数据库记录和 Redis 数据）
+   * 调用 /api/system/oauth2/authorization/revoke 撤销 token（会删除数据库记录和 Redis 数据）
    */
   async function logout() {
-    const currentToken = accessToken.value
-    
     try {
-      // 撤销 access token
-      // 这会触发 OAuth2AuthorizationService.remove() 删除数据库记录
-      // 同时 FeignOAuth2AuthorizationService 也会清理 Redis
-      if (currentToken) {
-        await authApi.revokeToken(currentToken)
-        console.log('✓ Access token revoked successfully')
-      }
+      // 撤销 token
+      // 后端会从 SecurityContext 中提取 token 并删除数据库和 Redis 中的授权数据
+      await authApi.revokeToken()
+      console.log('✓ Token revoked successfully')
     } catch (error) {
       console.error('✗ Revoke token error:', error)
       // 即使撤销失败，也要清除本地数据
@@ -128,6 +123,10 @@ export const useUserStore = defineStore('user', () => {
     // 清除 localStorage
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('pkce_code_verifier')
+    localStorage.removeItem('pkce_state')
+    localStorage.removeItem('pkce_authorization_id')
+    localStorage.removeItem('pkce_timestamp')
   }
   
   return {

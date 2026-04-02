@@ -170,12 +170,10 @@ export const authApi = {
   
   /**
    * 撤销令牌
-   * 调用 OAuth2 标准撤销端点，会删除数据库和 Redis 中的授权数据
+   * 调用 system 模块的撤销接口，会删除数据库和 Redis 中的授权数据
+   * DELETE /api/system/oauth2/authorization
+   * 注意：后端从 SecurityContext 中自动提取 token，不需要前端传递参数
    */
-  revokeToken: (token: string, tokenTypeHint: string = 'access_token') => 
-    oauthPost('/oauth2/revoke', { 
-      token,
-      token_type_hint: tokenTypeHint,
-      client_id: 'jnet-pkce-client'
-    })
+  revokeToken: () => 
+    oauthPost('/api/system/oauth2/authorization/revoke')
 }

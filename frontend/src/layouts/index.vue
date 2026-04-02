@@ -115,15 +115,23 @@ const toggleCollapse = () => {
 
 const handleCommand = async (command: string) => {
   if (command === 'logout') {
-    await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    
-    await userStore.logout()
-    ElMessage.success('已退出登录')
-    router.push('/login')
+    try {
+      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      
+      // 调用 logout，会自动撤销 token
+      await userStore.logout()
+      ElMessage.success('已退出登录')
+      router.push('/login')
+    } catch (error) {
+      if (error !== 'cancel') {
+        console.error('Logout error:', error)
+        ElMessage.error('退出登录失败')
+      }
+    }
   } else if (command === 'profile') {
     // TODO: 跳转到个人中心
     ElMessage.info('功能开发中...')

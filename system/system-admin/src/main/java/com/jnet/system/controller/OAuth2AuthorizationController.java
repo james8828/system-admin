@@ -1,12 +1,14 @@
 package com.jnet.system.controller;
 
 import com.jnet.common.result.Result;
+import com.jnet.common.security.utils.SecurityContextUtils;
 import com.jnet.system.api.dto.OAuth2AuthorizationDTO;
 import com.jnet.system.entity.OAuth2Authorization;
 import com.jnet.system.service.OAuth2AuthorizationService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -108,11 +110,12 @@ public class OAuth2AuthorizationController {
     /**
      * 撤销授权
      */
-    @DeleteMapping("/{id}")
-    public Result<Void> revokeAuthorization(@PathVariable("id") String id) {
+    @DeleteMapping()
+    public Result<Void> revokeAuthorization() {
         try {
-            log.info("Revoking authorization: {}", id);
-            Boolean success = oauth2AuthorizationService.revokeAuthorization(id);
+            log.info("Revoking authorization name :{}",SecurityContextUtils.extractUsernameFromSecurityContext());
+            String token = SecurityContextUtils.extractTokenFromSecurityContext();
+            Boolean success = oauth2AuthorizationService.revokeAuthorization(token);
             return Boolean.TRUE.equals(success) ? Result.success() : Result.error("撤销失败");
         } catch (Exception e) {
             log.error("Failed to revoke authorization", e);

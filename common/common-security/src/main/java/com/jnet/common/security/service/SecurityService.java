@@ -1,7 +1,7 @@
 // 在 common-security 中扩展 AuthorityUtils
 package com.jnet.common.security.service;
 
-import com.jnet.common.security.utils.AuthorityUtils;
+import com.jnet.common.security.utils.SecurityContextUtils;
 import com.jnet.common.security.utils.DynamicPermissionChecker;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Import;
@@ -28,7 +28,7 @@ public class SecurityService {
 
     
     public boolean hasPermi(String permission) {
-        return AuthorityUtils.hasPermission(permission) || isInternalService();
+        return SecurityContextUtils.hasPermission(permission) || isInternalService();
     }
     
     /**
@@ -62,7 +62,7 @@ public class SecurityService {
         
         // 降级处理：使用认证机构中的权限
         if (userPermSet == null || userPermSet.isEmpty()) {
-            userPermSet = new HashSet<>(AuthorityUtils.getAuthorities());
+            userPermSet = new HashSet<>(SecurityContextUtils.getAuthorities());
         }
         
         // 使用动态权限检查器
@@ -133,7 +133,7 @@ public class SecurityService {
     }
     
     public boolean hasRole(String role) {
-        List<String> authorities = AuthorityUtils.getAuthorities();
+        List<String> authorities = SecurityContextUtils.getAuthorities();
         return authorities.contains("ROLE_" + role) || 
                authorities.contains(role) || 
                isInternalService();

@@ -14,11 +14,31 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 通用缓存管理器（Servlet 专用）
- * <p>
- * 提供基于 Caffeine 的本地缓存支持，支持自动过期和统计信息
- * </p>
- *
- * @author JNet Team
+ * 
+ * <p>提供基于 Caffeine 的本地缓存支持，支持自动过期和统计信息</p>
+ * 
+ * <h3>核心功能：</h3>
+ * <ul>
+ *     <li>本地缓存管理 - 基于 Caffeine 的高性能缓存</li>
+ *     <li>自动过期策略 - 写入后 5 分钟自动过期</li>
+ *     <li>容量限制 - 最大 1000 条记录，LRU 淘汰</li>
+ *     <li>统计监控 - 命中率、命中次数、未命中次数</li>
+ *     <li>定时清理 - 每 10 分钟清理过期缓存</li>
+ * </ul>
+ * 
+ * <h3>使用示例：</h3>
+ * <pre>{@code
+ * @Autowired
+ * private PermissionCacheManager cacheManager;
+ * 
+ * // 存入缓存
+ * cacheManager.put("key", value);
+ * 
+ * // 获取缓存
+ * Object value = cacheManager.get("key");
+ * }</pre>
+ * 
+ * @author mu
  * @version 2.0 (Servlet Only)
  * @since 2026-03-30
  */
@@ -123,10 +143,10 @@ public class PermissionCacheManager {
         T value = (T) defaultCache.getIfPresent(key);
         if (value != null) {
             cacheHitCount++;
-            log.debug("缓存命中 - 键：{}, 命中次数：{}", key, cacheHitCount);
+            log.debug("缓存命中 - 键：{}, 累计命中次数：{}", key, cacheHitCount);
         } else {
             cacheMissCount++;
-            log.debug("缓存未命中 - 键：{}, 未命中次数：{}", key, cacheMissCount);
+            log.debug("缓存未命中 - 键：{}, 累计未命中次数：{}", key, cacheMissCount);
         }
         return value;
     }
@@ -139,7 +159,7 @@ public class PermissionCacheManager {
      */
     public void put(String key, Object value) {
         defaultCache.put(key, value);
-        log.debug("已将值放入缓存 - 键：{}", key);
+        log.debug("已缓存数据 - 键：{}", key);
     }
 
     /**
@@ -149,7 +169,7 @@ public class PermissionCacheManager {
      */
     public void invalidate(String key) {
         defaultCache.invalidate(key);
-        log.debug("已使缓存失效 - 键：{}", key);
+        log.debug("已移除缓存 - 键：{}", key);
     }
 
     /**
@@ -157,7 +177,7 @@ public class PermissionCacheManager {
      */
     public void invalidateAll() {
         defaultCache.invalidateAll();
-        log.info("已清空所有缓存条目");
+        log.info("已清空所有 {} 个缓存条目", size());
     }
 
     /**
@@ -171,41 +191,40 @@ public class PermissionCacheManager {
 
     /**
      * 清理缓存
-     * <p>
-     * 定期清理过期的缓存条目
-     * </p>
+     * 
+     * <p>定期清理过期的缓存条目，释放内存空间</p>
      */
     private void cleanupCache() {
         if (defaultCache != null) {
             long size = defaultCache.estimatedSize();
-            log.debug("正在清理缓存，当前大小：{}", size);
+            log.debug("正在清理过期缓存，当前大小：{}", size);
             defaultCache.cleanUp();
         }
     }
 
     /**
      * 打印缓存统计信息
-     * <p>
-     * 定期输出缓存命中率等统计信息
-     * </p>
+     * 
+     * <p>定期输出缓存命中率等统计信息，用于性能监控</p>
      */
     private void printCacheStats() {
         if (defaultCache != null) {
             var stats = defaultCache.stats();
             double hitRate = stats.hitRate() * 100;
-            log.info("缓存统计信息 - 大小：{}, 命中次数：{}, 未命中次数：{}, 命中率：{:.2f}%",
+            log.info("缓存统计 - 大小：{}, 命中次数：{}, 未命中次数：{}, 命中率：{}%",
                     defaultCache.estimatedSize(),
                     stats.hitCount(),
                     stats.missCount(),
-                    hitRate);
+                    String.format("%.2f", hitRate));
         }
 
-        log.info("总缓存统计 - 请求数：{}, 命中：{}, 未命中：{}, 命中率：{:.2f}%",
+        log.info("总缓存统计 - 请求数：{}, 命中：{}, 未命中：{}, 命中率：{}%",
                 cacheHitCount + cacheMissCount,
                 cacheHitCount,
                 cacheMissCount,
-                cacheHitCount + cacheMissCount > 0 ? (cacheHitCount * 100.0 / (cacheHitCount + cacheMissCount)) : 0);
+                String.format("%.2f", cacheHitCount + cacheMissCount > 0 ? (cacheHitCount * 100.0 / (cacheHitCount + cacheMissCount)) : 0));
     }
+
 
     /**
      * 获取缓存命中率
