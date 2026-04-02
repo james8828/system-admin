@@ -99,6 +99,7 @@ public class OAuth2SettingsUtil {
                     log.warn("无效的 Token 端点认证签名算法：{}", algorithmValue);
                 }
             }
+            // todo Authorization_Code 有效期设置 ❌ [配置缺失]
 
         } catch (Exception e) {
             log.warn("解析客户端设置失败：{}", e.getMessage());
