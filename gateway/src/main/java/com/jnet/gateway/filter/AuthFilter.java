@@ -1,6 +1,8 @@
 package com.jnet.gateway.filter;
 
+import com.jnet.common.redis.TokenManager;
 import com.jnet.gateway.config.GatewayAuthProperties;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -53,6 +55,9 @@ import static com.jnet.common.constant.Constants.TRACE_ID_HEADER;
 @Slf4j
 @Component
 public class AuthFilter implements GlobalFilter, Ordered {
+
+    @Resource
+    private TokenManager tokenManager;
 
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
     
@@ -139,11 +144,18 @@ public class AuthFilter implements GlobalFilter, Ordered {
             }
         }
 
-        // ========== 步骤 8: 可以在这里添加 Redis Token 验证（可选） ==========
-        // 示例：检查 Token 是否在黑名单中
-        // if (isTokenBlacklisted(token)) {
-        //     return onError(exchange, HttpStatus.UNAUTHORIZED, "Token is blacklisted");
-        // }
+        // ========== 步骤 8: 检查 Token 是否在黑名单中（已撤销/已注销）==========
+        if (gatewayAuthProperties.isEnableBlacklistCheck()) {
+            try {
+                if (tokenManager.isBlacklisted(token)) {
+                    log.warn("[Trace] [Gateway] [{}] 路径 {} 的 Token 已在黑名单中（已撤销），拒绝访问", traceId, path);
+                    return onError(exchange, HttpStatus.UNAUTHORIZED, "Token has been revoked");
+                }
+                log.debug("[Trace] [Gateway] [{}] Token 不在黑名单中，路径 {} 允许通过", traceId, path);
+            } catch (Exception e) {
+                log.warn("[Trace] [Gateway] [{}] 检查 Token 黑名单失败：{}", traceId, e.getMessage());
+            }
+        }
 
         // ========== 步骤 9: 验证通过，继续过滤器链 ==========
         log.debug("[Trace] [Gateway] [{}] 路径 {} 的 Token 验证通过", traceId, path);

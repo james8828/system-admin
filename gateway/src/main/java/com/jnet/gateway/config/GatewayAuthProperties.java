@@ -17,6 +17,7 @@ import java.util.List;
  *     <li>enable-token-check - 是否启用 Token 验证（默认 false）</li>
  *     <li>anonymous-urls - 匿名 URL 列表，跳过验证的路径</li>
  *     <li>token-expiry-check - 是否启用 Token 过期检查（默认 true）</li>
+ *     <li><b>enable-blacklist-check - 是否启用黑名单检查（默认 true）</b></li>
  *     <li>token-prefix - Token 在 Redis 中的前缀（用于黑名单/白名单功能）</li>
  * </ul>
  * 
@@ -30,11 +31,12 @@ import java.util.List;
  *         - /auth/**
  *         - /public/**
  *       token-expiry-check: true
+ *       enable-blacklist-check: true
  *       token-prefix: "token:"}
  * </pre>
  *
  * @author mu
- * @version 1.0
+ * @version 1.1 (增加黑名单检查)
  * @since 2026/4/1
  */
 @Data
@@ -77,6 +79,15 @@ public class GatewayAuthProperties {
      * <p>注意：这只是基本检查，完整的 Token 验证需要在资源服务器中进行</p>
      */
     private boolean tokenExpiryCheck = true;
+
+    /**
+     * 是否启用黑名单检查
+     * 
+     * <p>启用后会检查 Redis 中的 Token 黑名单，已撤销/注销的 Token 会被拒绝访问</p>
+     * <p>依赖 Redis 服务，需要确保 Redis 可用</p>
+     * <p>生产环境强烈建议启用，提高安全性</p>
+     */
+    private boolean enableBlacklistCheck = true;
 
     /**
      * Token 在 Redis 中的前缀

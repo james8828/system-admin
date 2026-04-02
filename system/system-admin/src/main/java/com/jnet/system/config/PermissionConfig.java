@@ -31,6 +31,7 @@ public class PermissionConfig implements CommandLineRunner {
         // 配置匿名访问 URL（不需要登录）
         permissionMetadataService.addAnonymousUrl("/logout");
         permissionMetadataService.addAnonymousUrl("/api/system/permissions/");
+        permissionMetadataService.addAnonymousUrl("/api/system/oauth2/authorization/revoke");
 
         log.info("Dynamic URL permissions initialized successfully");
     }

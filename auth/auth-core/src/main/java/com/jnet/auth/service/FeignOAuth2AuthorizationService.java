@@ -1,6 +1,7 @@
 package com.jnet.auth.service;
 
 import com.jnet.auth.utils.OAuth2SettingsUtil;
+import com.jnet.common.redis.TokenManager;
 import com.jnet.common.result.Result;
 import com.jnet.system.api.client.OAuth2AuthorizationFeignClient;
 import com.jnet.system.api.dto.OAuth2AuthorizationDTO;
@@ -19,6 +20,8 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.stereotype.Service;
+
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
@@ -57,6 +60,9 @@ public class FeignOAuth2AuthorizationService implements OAuth2AuthorizationServi
     @Resource
     private FeignRegisteredClientService feignRegisteredClientService;
 
+    @Resource
+    private TokenManager tokenManager;
+
 
     /**
      * 保存 OAuth2 授权信息到远程数据库
@@ -73,13 +79,30 @@ public class FeignOAuth2AuthorizationService implements OAuth2AuthorizationServi
                     authorization.getId(), authorization.getPrincipalName());
 
             OAuth2AuthorizationDTO dto = convertToDTO(authorization);
-            oauth2AuthorizationFeignClient.saveAuthorization(dto);
+            Result<Void> result = oauth2AuthorizationFeignClient.saveAuthorization(dto);
 
+            if (result != null && result.isSuccess()) {
+                // 只在 Access Token 存在时才存储到 Redis（第二次调用）
+                if (dto.getAccessTokenValue() != null && !dto.getAccessTokenValue().isEmpty()) {
+                    // 计算过期时间（秒）
+                    long expireSeconds = Duration.between(
+                            Instant.now(),
+                            dto.getAccessTokenExpiresAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
+                    ).getSeconds();
+
+                    tokenManager.storeToken(dto.getAccessTokenValue(), dto.getPrincipalName(), expireSeconds);
+                    log.info("✓ Token 已存储到 Redis: token={}, user={}, expire={}s",
+                            dto.getAccessTokenValue(), dto.getPrincipalName(), expireSeconds);
+                } else {
+                    log.debug("第一次调用：仅保存授权码，Access Token 尚未生成");
+                }
+            }
         } catch (Exception e) {
             log.error("保存 OAuth2 授权信息失败", e);
             throw new RuntimeException("保存 OAuth2 授权信息失败", e);
         }
     }
+
 
     /**
      * 删除/撤销 OAuth2 授权信息

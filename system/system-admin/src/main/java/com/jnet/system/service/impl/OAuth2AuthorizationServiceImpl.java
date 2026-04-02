@@ -5,16 +5,20 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.jnet.common.redis.TokenManager;
 import com.jnet.common.result.PageQuery;
 import com.jnet.common.result.PageResult;
 import com.jnet.system.mapper.OAuth2AuthorizationMapper;
 import com.jnet.system.entity.OAuth2Authorization;
 
 import com.jnet.system.service.OAuth2AuthorizationService;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -24,6 +28,9 @@ import java.util.List;
 @Slf4j
 @Service
 public class OAuth2AuthorizationServiceImpl extends ServiceImpl<OAuth2AuthorizationMapper, OAuth2Authorization> implements OAuth2AuthorizationService {
+
+    @Resource
+    private TokenManager tokenManager;
 
     @Override
     public PageResult<OAuth2Authorization> pageAuthorization(PageQuery pageQuery, OAuth2Authorization authorization) {
@@ -80,12 +87,27 @@ public class OAuth2AuthorizationServiceImpl extends ServiceImpl<OAuth2Authorizat
         
         LambdaQueryWrapper<OAuth2Authorization> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(OAuth2Authorization::getAccessTokenValue, accessTokenValue);
-        
         OAuth2Authorization authorization = getOne(wrapper);
-        if (authorization != null) {
-            return removeById(authorization.getId());
+        if (authorization != null && removeById(authorization.getId())) {
+            // 将 Token 加入 Redis 黑名单（关键步骤！）
+            long remainingExpireTime = getRemainingExpireTime(authorization);
+            tokenManager.addToBlacklist(accessTokenValue, remainingExpireTime);
+            log.info("Token 已加入黑名单：token={}, expire={}s", accessTokenValue, remainingExpireTime);
+            return true;
         }
         return false;
+    }
+
+    /**
+     * 计算 Token 剩余有效期
+     */
+    private long getRemainingExpireTime(OAuth2Authorization authorization) {
+        LocalDateTime expiresAt = authorization.getAccessTokenExpiresAt();
+        if (expiresAt == null) {
+            return 7200; // 默认 2 小时
+        }
+        // 将 LocalDateTime 转换为 Instant（使用系统默认时区）
+        return Duration.between(Instant.now(), expiresAt.atZone(java.time.ZoneId.systemDefault()).toInstant()).getSeconds();
     }
 
     @Override

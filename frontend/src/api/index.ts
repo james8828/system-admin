@@ -171,9 +171,9 @@ export const authApi = {
   /**
    * 撤销令牌
    * 调用 system 模块的撤销接口，会删除数据库和 Redis 中的授权数据
-   * DELETE /api/system/oauth2/authorization
+   * DELETE /api/system/oauth2/authorization/revoke
    * 注意：后端从 SecurityContext 中自动提取 token，不需要前端传递参数
    */
   revokeToken: () => 
-    oauthPost('/api/system/oauth2/authorization/revoke')
+    del('/system/oauth2/authorization/revoke')
 }

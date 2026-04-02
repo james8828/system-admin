@@ -31,8 +31,8 @@ import lombok.Getter;
 @Getter
 public enum ResultCode {
 
-    SUCCESS(0, "成功"),
-    FAIL(1, "失败"),
+    SUCCESS(200, "成功"),
+    FAIL(500, "失败"),
     UNAUTHORIZED(401, "未授权"),
     FORBIDDEN(403, "禁止访问"),
     NOT_FOUND(404, "资源不存在"),

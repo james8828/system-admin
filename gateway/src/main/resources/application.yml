@@ -91,3 +91,5 @@ jnet:
       token-prefix: "token:"
       # 是否启用 Token 过期检查
       token-expiry-check: true
+      # 是否启用黑名单检查（已撤销/注销的 Token）
+      enable-blacklist-check: true
